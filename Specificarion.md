@@ -1,4 +1,7 @@
 # **Data Warehouse Project Specification (Minimal Viable Version)**  
+The Data warehouse will be a Centralized Data Hub where unifies sensor, video, and file storage in one place. It will provides structured datasets for training models (e.g., sensor analytics, video processing). In addition, Teaches modular architecture, API design, and scalable storage solutions.
+
+By this project, we will Build a Scalable API, Solve Real Storage Challenges and Empower Future Projects
 
 ## **1. Core Objectives**  
 ✅ **API** to ingest and retrieve:  
