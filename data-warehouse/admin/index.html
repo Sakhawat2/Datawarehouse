@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>📊 Data Warehouse Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background-color: #f7f7f7;
+      color: #333;
+    }
+    h1, h2 {
+      color: #2c3e50;
+    }
+    .chart-container {
+      width: 400px;
+      margin-top: 30px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 30px;
+      background: #fff;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #3498db;
+      color: white;
+    }
+    tr:hover {
+      background-color: #f1f1f1;
+    }
+    a {
+      color: #2980b9;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>📦 Data Warehouse Admin Panel</h1>
+  <p>Total Used Storage: <strong><span id="storage-total">Loading...</span></strong> MB</p>
+
+  <div class="chart-container">
+    <canvas id="typeChart"></canvas>
+  </div>
+
+  <h2>📟 Recent Sensor Data</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Sensor</th>
+        <th>Timestamp</th>
+        <th>Value</th>
+        <th>Unit</th>
+      </tr>
+    </thead>
+    <tbody id="sensor-table-body">
+      <tr><td colspan="5">Loading data...</td></tr>
+    </tbody>
+  </table>
+
+  <h2>🎥 Uploaded Videos</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Filename</th>
+        <th>Preview</th>
+      </tr>
+    </thead>
+    <tbody id="video-table-body">
+      <tr><td colspan="2">Scanning for videos...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    // Load storage stats
+    fetch('/admin/stats')
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById("storage-total").textContent = data.total_storage;
+
+        const ctx = document.getElementById("typeChart").getContext("2d");
+        new Chart(ctx, {
+          type: 'pie',
+          data: {
+            labels: ['Sensor DB', 'Video Files', 'Other Files'],
+            datasets: [{
+              data: [data.sensor_storage, data.video_storage, data.other_storage],
+              backgroundColor: ['#3498db', '#e74c3c', '#2ecc71'],
+            }]
+          },
+          options: {
+            plugins: {
+              legend: {
+                position: 'bottom'
+              }
+            }
+          }
+        });
+      });
+
+    // Load sensor data
+    fetch('/api/sensor')
+      .then(res => res.json())
+      .then(data => {
+        const body = document.getElementById("sensor-table-body");
+        body.innerHTML = "";
+        data.data.forEach(row => {
+          const tr = document.createElement("tr");
+          row.forEach(cell => {
+            const td = document.createElement("td");
+            td.textContent = cell;
+            tr.appendChild(td);
+          });
+          body.appendChild(tr);
+        });
+      });
+
+    // Load video file list
+    fetch('/admin/videos')
+      .then(res => res.json())
+      .then(files => {
+        const body = document.getElementById("video-table-body");
+        body.innerHTML = "";
+        files.forEach(filename => {
+          const tr = document.createElement("tr");
+          const nameCell = document.createElement("td");
+          const linkCell = document.createElement("td");
+
+          nameCell.textContent = filename;
+
+          const previewLink = document.createElement("a");
+          previewLink.href = `/api/video/${filename}`;
+          previewLink.textContent = "▶ Watch";
+          previewLink.target = "_blank";
+
+          linkCell.appendChild(previewLink);
+
+          tr.appendChild(nameCell);
+          tr.appendChild(linkCell);
+          body.appendChild(tr);
+        });
+      });
+  </script>
+</body>
+</html>
