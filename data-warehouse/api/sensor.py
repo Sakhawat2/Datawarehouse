@@ -1,12 +1,16 @@
 # api/sensor.py
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import sqlite3
+import os
+import csv
 
 sensor_router = APIRouter()
 
 DB_PATH = "storage/storage/sensors.db"
+CSV_DIR = "storage/sensors"
+CSV_FILE = os.path.join(CSV_DIR, "sensor_data.csv")
 
 class SensorData(BaseModel):
     sensor_id: str
@@ -16,6 +20,7 @@ class SensorData(BaseModel):
 
 @sensor_router.post("/")
 def submit_sensor_data(data: SensorData):
+    # ✅ Save to SQLite
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
@@ -24,7 +29,17 @@ def submit_sensor_data(data: SensorData):
     """, (data.sensor_id, data.timestamp, data.value, data.unit))
     conn.commit()
     conn.close()
-    return {"message": "Sensor data stored successfully"}
+
+    # ✅ Save to CSV
+    os.makedirs(CSV_DIR, exist_ok=True)
+    write_header = not os.path.exists(CSV_FILE)
+    with open(CSV_FILE, "a", newline="") as f:
+        writer = csv.writer(f)
+        if write_header:
+            writer.writerow(["Sensor ID", "Timestamp", "Value", "Unit"])
+        writer.writerow([data.sensor_id, data.timestamp, data.value, data.unit])
+
+    return {"message": "Sensor data stored in SQLite and CSV"}
 
 @sensor_router.get("/")
 def retrieve_sensor_data(start: str = None, end: str = None):

@@ -2,52 +2,82 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>📊 Data Warehouse Dashboard</title>
+  <title>📦 Data Warehouse Admin Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 40px;
-      background-color: #f7f7f7;
+      background-color: #f9f9f9;
       color: #333;
     }
-    h1, h2 {
+
+    h1 {
       color: #2c3e50;
+      margin-top: 20px;
+      margin-bottom: 10px;
     }
+
+    h2 {
+      color: #2c3e50;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    p {
+      margin: 4px 0;
+    }
+
     .chart-container {
       width: 400px;
-      margin-top: 30px;
+      margin-top: 10px;
+      margin-bottom: 10px;
     }
+
     table {
       border-collapse: collapse;
       width: 100%;
-      margin-top: 30px;
       background: #fff;
+      margin-top: 10px;
     }
+
     th, td {
       border: 1px solid #ddd;
       padding: 10px;
       text-align: left;
     }
+
     th {
       background-color: #3498db;
       color: white;
     }
+
     tr:hover {
       background-color: #f1f1f1;
     }
+
     a {
       color: #2980b9;
       text-decoration: none;
     }
+
     a:hover {
       text-decoration: underline;
     }
+
+    /* Optional: limit table height */
+    /*
+    .table-scroll {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    */
   </style>
 </head>
 <body>
-  <h1>📦 Data Warehouse Admin Panel</h1>
-  <p>Total Used Storage: <strong><span id="storage-total">Loading...</span></strong> MB</p>
+
+  <h1>📦 Data Warehouse Admin Dashboard</h1>
+  <p><strong>Total Used Storage:</strong> <span id="storage-total">Loading...</span> MB</p>
 
   <div class="chart-container">
     <canvas id="typeChart"></canvas>
@@ -65,7 +95,7 @@
       </tr>
     </thead>
     <tbody id="sensor-table-body">
-      <tr><td colspan="5">Loading data...</td></tr>
+      <tr><td colspan="5">Loading sensor data...</td></tr>
     </tbody>
   </table>
 
@@ -83,8 +113,7 @@
   </table>
 
   <script>
-    // Load storage stats
-    fetch('/admin/stats')
+    fetch('/api/admin/stats')
       .then(res => res.json())
       .then(data => {
         document.getElementById("storage-total").textContent = data.total_storage;
@@ -101,15 +130,12 @@
           },
           options: {
             plugins: {
-              legend: {
-                position: 'bottom'
-              }
+              legend: { position: 'bottom' }
             }
           }
         });
       });
 
-    // Load sensor data
     fetch('/api/sensor')
       .then(res => res.json())
       .then(data => {
@@ -126,31 +152,44 @@
         });
       });
 
-    // Load video file list
-    fetch('/admin/videos')
+    fetch('/api/admin/videos')
       .then(res => res.json())
       .then(files => {
         const body = document.getElementById("video-table-body");
         body.innerHTML = "";
-        files.forEach(filename => {
+
+        if (Array.isArray(files) && files.length > 0) {
+          files.forEach(filename => {
+            const tr = document.createElement("tr");
+
+            const nameCell = document.createElement("td");
+            nameCell.textContent = filename;
+
+            const linkCell = document.createElement("td");
+            const previewLink = document.createElement("a");
+            previewLink.href = `/api/video/${filename}`;
+            previewLink.textContent = "▶ Watch";
+            previewLink.target = "_blank";
+
+            linkCell.appendChild(previewLink);
+            tr.appendChild(nameCell);
+            tr.appendChild(linkCell);
+            body.appendChild(tr);
+          });
+        } else {
           const tr = document.createElement("tr");
-          const nameCell = document.createElement("td");
-          const linkCell = document.createElement("td");
-
-          nameCell.textContent = filename;
-
-          const previewLink = document.createElement("a");
-          previewLink.href = `/api/video/${filename}`;
-          previewLink.textContent = "▶ Watch";
-          previewLink.target = "_blank";
-
-          linkCell.appendChild(previewLink);
-
-          tr.appendChild(nameCell);
-          tr.appendChild(linkCell);
+          const td = document.createElement("td");
+          td.colSpan = 2;
+          td.textContent = "No videos found.";
+          tr.appendChild(td);
           body.appendChild(tr);
-        });
+        }
+      })
+      .catch(err => {
+        const body = document.getElementById("video-table-body");
+        body.innerHTML = `<tr><td colspan="2">Failed to load video list: ${err}</td></tr>`;
       });
   </script>
+
 </body>
 </html>

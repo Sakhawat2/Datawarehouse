@@ -11,8 +11,8 @@ def get_file_size_mb(path):
 
 def get_storage_stats():
     stats = {
-        "sensor_storage": get_file_size_mb("storage/sensors.db"),
-        "video_storage": get_file_size_mb("storage/videos"),
+        "sensor_storage": get_file_size_mb("storage/storage/sensors.db"),
+        "video_storage": get_file_size_mb("storage/storage/videos"),
         "other_storage": get_file_size_mb("storage/others") if os.path.exists("storage/others") else 0.0,
     }
     stats["total_storage"] = round(sum(stats.values()), 2)
