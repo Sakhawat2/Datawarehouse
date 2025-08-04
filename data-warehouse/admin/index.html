@@ -11,67 +11,53 @@
       background-color: #f9f9f9;
       color: #333;
     }
-
     h1 {
-      color: #2c3e50;
-      margin-top: 20px;
       margin-bottom: 10px;
+      color: #2c3e50;
     }
-
     h2 {
-      color: #2c3e50;
       margin-top: 20px;
       margin-bottom: 10px;
+      color: #2c3e50;
     }
-
-    p {
-      margin: 4px 0;
-    }
-
-    .chart-container {
-      width: 400px;
-      margin-top: 10px;
-      margin-bottom: 10px;
-    }
-
     table {
       border-collapse: collapse;
       width: 100%;
       background: #fff;
       margin-top: 10px;
     }
-
     th, td {
       border: 1px solid #ddd;
       padding: 10px;
       text-align: left;
     }
-
     th {
       background-color: #3498db;
       color: white;
     }
-
     tr:hover {
       background-color: #f1f1f1;
     }
-
+    .chart-container {
+      width: 400px;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
     a {
       color: #2980b9;
       text-decoration: none;
     }
-
     a:hover {
       text-decoration: underline;
     }
-
-    /* Optional: limit table height */
-    /*
-    .table-scroll {
-      max-height: 300px;
-      overflow-y: auto;
+    form {
+      margin-top: 10px;
+      margin-bottom: 10px;
     }
-    */
+    input, button {
+      padding: 6px;
+      margin: 4px;
+    }
   </style>
 </head>
 <body>
@@ -86,18 +72,35 @@
   <h2>📟 Recent Sensor Data</h2>
   <table>
     <thead>
-      <tr>
-        <th>ID</th>
-        <th>Sensor</th>
-        <th>Timestamp</th>
-        <th>Value</th>
-        <th>Unit</th>
-      </tr>
-    </thead>
+  <tr>
+    <th>ID</th>
+    <th>Sensor ID</th> <!-- ✅ Added -->
+    <th>Timestamp</th>
+    <th>Value</th>
+    <th>Unit</th>
+  </tr>
+</thead>
+
     <tbody id="sensor-table-body">
       <tr><td colspan="5">Loading sensor data...</td></tr>
     </tbody>
   </table>
+
+  <h3>➕ Submit Sensor Entry</h3>
+  <form id="sensor-form">
+    <input type="text" id="sensor-id" placeholder="Sensor ID" required>
+    <input type="datetime-local" id="sensor-timestamp" required>
+    <input type="number" step="0.01" id="sensor-value" placeholder="Value" required>
+    <input type="text" id="sensor-unit" placeholder="Unit" required>
+    <button type="submit">Submit</button>
+  </form>
+  <p id="sensor-submit-status"></p>
+  <h3>🧹 Delete Old Sensor Data</h3>
+  <form id="purge-form">
+    <input type="datetime-local" id="purge-before" required>
+    <button type="submit">Delete Before</button>
+  </form>
+  <p id="purge-status"></p>
 
   <h2>🎥 Uploaded Videos</h2>
   <table>
@@ -105,19 +108,27 @@
       <tr>
         <th>Filename</th>
         <th>Preview</th>
+        <th>Action</th>
       </tr>
     </thead>
     <tbody id="video-table-body">
-      <tr><td colspan="2">Scanning for videos...</td></tr>
+      <tr><td colspan="3">Scanning for videos...</td></tr>
     </tbody>
   </table>
 
+  <h3>➕ Upload New Video</h3>
+  <form id="video-upload-form">
+    <input type="file" id="video-file" accept="video/*" required>
+    <button type="submit">Upload</button>
+  </form>
+  <p id="video-upload-status"></p>
+
   <script>
+    // Chart + Storage Stats
     fetch('/api/admin/stats')
       .then(res => res.json())
       .then(data => {
         document.getElementById("storage-total").textContent = data.total_storage;
-
         const ctx = document.getElementById("typeChart").getContext("2d");
         new Chart(ctx, {
           type: 'pie',
@@ -129,13 +140,32 @@
             }]
           },
           options: {
-            plugins: {
-              legend: { position: 'bottom' }
-            }
+            plugins: { legend: { position: 'bottom' } }
           }
         });
       });
 
+    // Sensor Upload
+    document.getElementById("sensor-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const data = {
+        sensor_id: document.getElementById("sensor-id").value,
+        timestamp: document.getElementById("sensor-timestamp").value,
+        value: parseFloat(document.getElementById("sensor-value").value),
+        unit: document.getElementById("sensor-unit").value
+      };
+      fetch("/api/sensor/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      })
+        .then(res => res.json())
+        .then(msg => {
+          document.getElementById("sensor-submit-status").textContent = msg.message;
+        });
+    });
+
+        // Load Sensor Data + Add Delete Button Per Row
     fetch('/api/sensor')
       .then(res => res.json())
       .then(data => {
@@ -143,21 +173,79 @@
         body.innerHTML = "";
         data.data.forEach(row => {
           const tr = document.createElement("tr");
-          row.forEach(cell => {
+          let sensorId;
+          row.forEach((cell, i) => {
             const td = document.createElement("td");
             td.textContent = cell;
             tr.appendChild(td);
+            if (i === 0) sensorId = cell;
           });
+
+          const deleteTd = document.createElement("td");
+          const deleteBtn = document.createElement("button");
+          deleteBtn.textContent = "🗑 Delete";
+          deleteBtn.onclick = () => {
+            fetch(`/api/sensor/${sensorId}/`, { method: "DELETE" })
+              .then(res => res.json())
+              .then(msg => {
+                alert(msg.message);
+                tr.remove();
+              })
+              .catch(() => {
+                alert("Failed to delete sensor entry.");
+              });
+          };
+          deleteTd.appendChild(deleteBtn);
+          tr.appendChild(deleteTd);
+
           body.appendChild(tr);
         });
       });
 
+      // Purge Old Sensor Data
+    document.getElementById("purge-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const before = document.getElementById("purge-before").value;
+      const url = `/api/sensor/purge/?before=${encodeURIComponent(before)}`;
+
+      fetch(url, { method: "DELETE" })
+        .then(res => res.json())
+        .then(msg => {
+          document.getElementById("purge-status").textContent = msg.message;
+        })
+        .catch(() => {
+          document.getElementById("purge-status").textContent = "Deletion failed.";
+        });
+    });
+
+    // Video Upload
+    document.getElementById("video-upload-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const fileInput = document.getElementById("video-file");
+      const file = fileInput.files[0];
+      const formData = new FormData();
+      formData.append("file", file);
+
+      fetch("/api/video/", {
+        method: "POST",
+        body: formData
+      })
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("video-upload-status").textContent = data.message;
+          fileInput.value = "";
+        })
+        .catch(err => {
+          document.getElementById("video-upload-status").textContent = "Upload failed.";
+        });
+    });
+
+    // Load Videos
     fetch('/api/admin/videos')
       .then(res => res.json())
       .then(files => {
         const body = document.getElementById("video-table-body");
         body.innerHTML = "";
-
         if (Array.isArray(files) && files.length > 0) {
           files.forEach(filename => {
             const tr = document.createElement("tr");
@@ -170,24 +258,34 @@
             previewLink.href = `/api/video/${filename}`;
             previewLink.textContent = "▶ Watch";
             previewLink.target = "_blank";
-
             linkCell.appendChild(previewLink);
+
+            const deleteCell = document.createElement("td");
+            const deleteBtn = document.createElement("button");
+            deleteBtn.textContent = "🗑 Delete";
+            deleteBtn.onclick = () => {
+              fetch(`/api/video/${filename}`, { method: "DELETE" })
+                .then(res => res.json())
+                .then(msg => {
+                  alert(msg.message);
+                  tr.remove();
+                });
+            };
+            deleteCell.appendChild(deleteBtn);
+
             tr.appendChild(nameCell);
             tr.appendChild(linkCell);
+            tr.appendChild(deleteCell);
             body.appendChild(tr);
           });
         } else {
           const tr = document.createElement("tr");
           const td = document.createElement("td");
-          td.colSpan = 2;
+          td.colSpan = 3;
           td.textContent = "No videos found.";
           tr.appendChild(td);
           body.appendChild(tr);
         }
-      })
-      .catch(err => {
-        const body = document.getElementById("video-table-body");
-        body.innerHTML = `<tr><td colspan="2">Failed to load video list: ${err}</td></tr>`;
       });
   </script>
 
