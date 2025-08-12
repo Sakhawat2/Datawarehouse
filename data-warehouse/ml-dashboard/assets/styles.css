@@ -1,0 +1,84 @@
+body {
+  font-family: "Segoe UI", sans-serif;
+  background-color: #f9f9f9;
+  margin: 0;
+  padding: 20px;
+  color: #333;
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.chart-container {
+  display: flex;
+  justify-content: space-around;
+  flex-wrap: wrap;
+  gap: 30px;
+}
+
+canvas {
+  background: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.1);
+  max-width: 600px;
+  width: 100%;
+}
+
+.progress-wrapper {
+  margin: 20px auto;
+  max-width: 600px;
+}
+
+.progress-bar {
+  height: 24px;
+  background-color: #eee;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+#progressFill {
+  height: 100%;
+  width: 0%;
+  background-color: #2ecc71;
+  transition: width 0.5s ease-in-out;
+}
+
+#logContainer {
+  max-width: 600px;
+  margin: 40px auto;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  padding: 20px;
+  overflow-y: auto;
+  height: 200px;
+}
+
+#logs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-family: monospace;
+}
+
+.export-controls {
+  text-align: center;
+  margin-top: 30px;
+}
+
+.export-controls button {
+  padding: 10px 20px;
+  margin: 0 10px;
+  background: #3498db;
+  border: none;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.export-controls button:hover {
+  background: #2980b9;
+}
