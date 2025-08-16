@@ -7,13 +7,14 @@ import datetime
 
 sensor_router = APIRouter()
 
-DB_PATH = "storage/storage/sensors.db"
+DB_PATH = "storage/sensors.db"
 CSV_DIR = "storage/sensors"
 CSV_FILE = os.path.join(CSV_DIR, "sensor_data.csv")
 
 class SensorData(BaseModel):
     sensor_id: str
-    timestamp: str
+    start_timestamp: str
+    end_timestamp: str
     value: float
     unit: str
 
@@ -21,7 +22,8 @@ class SensorData(BaseModel):
 @sensor_router.post("/")
 def submit_sensor_data(data: SensorData):
     try:
-        datetime.datetime.fromisoformat(data.timestamp)
+        datetime.datetime.fromisoformat(data.start_timestamp)
+        datetime.datetime.fromisoformat(data.end_timestamp)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid timestamp format")
 
@@ -31,9 +33,9 @@ def submit_sensor_data(data: SensorData):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO sensors (sensor_id, timestamp, value, unit)
-        VALUES (?, ?, ?, ?)
-    """, (data.sensor_id, data.timestamp, data.value, data.unit))
+        INSERT INTO sensors (sensor_id, start_timestamp, end_timestamp, value, unit)
+        VALUES (?, ?, ?, ?, ?)
+    """, (data.sensor_id, data.start_timestamp, data.end_timestamp, data.value, data.unit))
     conn.commit()
     conn.close()
 
@@ -42,8 +44,8 @@ def submit_sensor_data(data: SensorData):
     with open(CSV_FILE, "a", newline="") as f:
         writer = csv.writer(f)
         if write_header:
-            writer.writerow(["Sensor ID", "Timestamp", "Value", "Unit"])
-        writer.writerow([data.sensor_id, data.timestamp, data.value, data.unit])
+            writer.writerow(["Sensor ID", "Start Timestamp", "End Timestamp", "Value", "Unit"])
+        writer.writerow([data.sensor_id, data.start_timestamp, data.end_timestamp, data.value, data.unit])
 
     return {"message": "✅ Sensor data stored in SQLite and CSV"}
 
@@ -52,14 +54,14 @@ def submit_sensor_data(data: SensorData):
 def retrieve_sensor_data(start: str = None, end: str = None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    query = "SELECT rowid, sensor_id, timestamp, value, unit FROM sensors WHERE 1=1"
+    query = "SELECT rowid, sensor_id, start_timestamp, end_timestamp, value, unit FROM sensors WHERE 1=1"
     params = []
 
     if start:
-        query += " AND timestamp >= ?"
+        query += " AND start_timestamp >= ?"
         params.append(start)
     if end:
-        query += " AND timestamp <= ?"
+        query += " AND end_timestamp <= ?"
         params.append(end)
 
     cursor.execute(query, params)
@@ -68,6 +70,32 @@ def retrieve_sensor_data(start: str = None, end: str = None):
 
     return {"data": rows}
 
+# 📋 Admin view: latest 100 entries
+@sensor_router.get("/admin/sensors")
+def get_sensor_data_for_admin():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT sensor_id, start_timestamp, end_timestamp, value, unit
+        FROM sensors
+        ORDER BY start_timestamp DESC
+        LIMIT 100
+    """)
+    rows = cursor.fetchall()
+    conn.close()
+
+    data = [
+        {
+            "Sensor ID": row[0],
+            "Start Timestamp": row[1],
+            "End Timestamp": row[2],
+            "Value": row[3],
+            "Unit": row[4]
+        }
+        for row in rows
+    ]
+    return data
+
 # 🔧 Update existing entry by row ID
 @sensor_router.put("/update/{entry_id}")
 def update_sensor_entry(
@@ -75,7 +103,8 @@ def update_sensor_entry(
     updated: SensorData = None
 ):
     try:
-        datetime.datetime.fromisoformat(updated.timestamp)
+        datetime.datetime.fromisoformat(updated.start_timestamp)
+        datetime.datetime.fromisoformat(updated.end_timestamp)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid timestamp format")
 
@@ -83,9 +112,9 @@ def update_sensor_entry(
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE sensors
-        SET sensor_id = ?, timestamp = ?, value = ?, unit = ?
+        SET sensor_id = ?, start_timestamp = ?, end_timestamp = ?, value = ?, unit = ?
         WHERE rowid = ?
-    """, (updated.sensor_id, updated.timestamp, updated.value, updated.unit, entry_id))
+    """, (updated.sensor_id, updated.start_timestamp, updated.end_timestamp, updated.value, updated.unit, entry_id))
     if cursor.rowcount == 0:
         raise HTTPException(status_code=404, detail=f"No entry found with ID {entry_id}")
     conn.commit()
@@ -103,7 +132,7 @@ def purge_old_sensor_data(before: str = Query(...)):
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM sensors WHERE timestamp < ?", (before,))
+    cursor.execute("DELETE FROM sensors WHERE end_timestamp < ?", (before,))
     deleted = cursor.rowcount
     conn.commit()
     conn.close()
@@ -135,6 +164,3 @@ def delete_sensor_entry_by_id(entry_id: int = Path(...)):
     if deleted == 0:
         raise HTTPException(status_code=404, detail=f"No entry found with ID {entry_id}")
     return {"message": f"🗑 Entry {entry_id} deleted successfully"}
-
-
-

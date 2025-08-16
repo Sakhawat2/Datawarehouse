@@ -1,0 +1,20 @@
+import os
+
+csv_content = """Sensor ID,Start Timestamp,End Timestamp,Value,Unit
+Temp_1,2025-08-16T08:00:00,2025-08-16T08:01:00,22.5,C
+Temp_1,2025-08-16T08:01:00,2025-08-16T08:02:00,22.6,C
+Temp_1,2025-08-16T08:02:00,2025-08-16T08:03:00,22.7,C
+HumiditySensor2,2025-08-16T08:00:00,2025-08-16T08:01:00,45.2,%
+HumiditySensor2,2025-08-16T08:01:00,2025-08-16T08:02:00,45.5,%
+HumiditySensor2,2025-08-16T08:02:00,2025-08-16T08:03:00,45.3,%
+accel_01,2025-08-16T08:00:00,2025-08-16T08:01:00,9.81,m/s²
+accel_01,2025-08-16T08:01:00,2025-08-16T08:02:00,9.79,m/s²
+accel_01,2025-08-16T08:02:00,2025-08-16T08:03:00,9.80,m/s²
+Temp_Sensor_2,2025-08-16T08:00:00,2025-08-16T08:01:00,21.0,C
+"""
+
+os.makedirs("storage/sensors", exist_ok=True)
+with open("storage/sensors/sensor_data.csv", "w") as f:
+    f.write(csv_content)
+
+print("CSV file created at storage/sensors/sensor_data.csv")

@@ -70,17 +70,19 @@
     <canvas id="typeChart"></canvas>
   </div>
 
-  <h2>📟 Recent Sensor Data</h2>
-  <table>
+  <h2>📊 Sensor Data</h2>
+  <table id="sensor-table" border="1">
     <thead>
-  <tr>
-    <th>ID</th>
-    <th>Sensor ID</th> <!-- ✅ Added -->
-    <th>Timestamp</th>
-    <th>Value</th>
-    <th>Unit</th>
-  </tr>
-</thead>
+     <tr>
+       <th>Sensor ID</th>
+       <th>Start Time</th>
+       <th>End Time</th>
+       <th>Value</th>
+       <th>Unit</th>
+     </tr>
+    </thead>
+    <tbody></tbody>
+    </table>
 
     <tbody id="sensor-table-body">
       <tr><td colspan="5">Loading sensor data...</td></tr>
@@ -91,11 +93,13 @@
 
   <h3>➕ Submit Sensor Entry</h3>
   <form id="sensor-form">
-    <input type="text" id="sensor-id" placeholder="Sensor ID" required>
-    <input type="datetime-local" id="sensor-timestamp" required>
-    <input type="number" step="0.01" id="sensor-value" placeholder="Value" required>
-    <input type="text" id="sensor-unit" placeholder="Unit" required>
-    <button type="submit">Submit</button>
+    <input type="text" id="sensor-id" placeholder="Sensor ID" required />
+  <input type="datetime-local" id="sensor-start" required />
+  <input type="datetime-local" id="sensor-end" required />
+  <input type="number" id="sensor-value" placeholder="Value" required />
+  <input type="text" id="sensor-unit" placeholder="Unit" required />
+  <button type="submit">Submit</button>
+  <div id="sensor-submit-status"></div>
   </form>
   <p id="sensor-submit-status"></p>
   <h3>🧹 Delete Old Sensor Data</h3>
@@ -126,198 +130,260 @@
   </form>
   <p id="video-upload-status"></p>
 
+   
+
   <h2>📤 Export ML Training Dataset</h2>
-<button onclick="downloadTrainingSet()">Export Dataset</button>
-<p id="export-status"></p>
+  <label for="sensor-select">Choose Sensor:</label>
+  <select id="sensor-select">
+    <option value="">Loading sensors...</option>
+    </select>
+  <br><br>
 
-  <script>
-    // Chart + Storage Stats
-    fetch('/api/admin/stats')
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById("storage-total").textContent = data.total_storage;
-        const ctx = document.getElementById("typeChart").getContext("2d");
-        new Chart(ctx, {
-          type: 'pie',
-          data: {
-            labels: ['Sensor DB', 'Video Files', 'Other Files'],
-            datasets: [{
-              data: [data.sensor_storage, data.video_storage, data.other_storage],
-              backgroundColor: ['#3498db', '#e74c3c', '#2ecc71'],
-            }]
-          },
-          options: {
-            plugins: { legend: { position: 'bottom' } }
-          }
-        });
+  <label for="start-time">Start Time:</label>
+  <input type="datetime-local" id="start-time">
+
+  <label for="end-time">End Time:</label>
+  <input type="datetime-local" id="end-time">
+  <br><br>
+
+  <button onclick="downloadTrainingSet()">Export Dataset</button>
+  <p id="export-status"></p>
+
+  
+
+
+  
+ <script>
+  // 📊 Load Storage Stats + Chart
+  fetch('/api/admin/stats')
+    .then(res => res.json())
+    .then(data => {
+      document.getElementById("storage-total").textContent = data.total_storage;
+      const ctx = document.getElementById("typeChart").getContext("2d");
+      new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: ['Sensor DB', 'Video Files', 'Other Files'],
+          datasets: [{
+            data: [data.sensor_storage, data.video_storage, data.other_storage],
+            backgroundColor: ['#3498db', '#e74c3c', '#2ecc71'],
+          }]
+        },
+        options: {
+          plugins: { legend: { position: 'bottom' } }
+        }
       });
-
-    // Sensor Upload
-    document.getElementById("sensor-form").addEventListener("submit", e => {
-      e.preventDefault();
-      const data = {
-        sensor_id: document.getElementById("sensor-id").value,
-        timestamp: document.getElementById("sensor-timestamp").value,
-        value: parseFloat(document.getElementById("sensor-value").value),
-        unit: document.getElementById("sensor-unit").value
-      };
-      fetch("/api/sensor/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      })
-        .then(res => res.json())
-        .then(msg => {
-          document.getElementById("sensor-submit-status").textContent = msg.message;
-        });
     });
 
-        // Load Sensor Data + Add Delete Button Per Row
-    fetch('/api/sensor')
+  // 📥 Sensor Upload
+  document.getElementById("sensor-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const data = {
+      sensor_id: document.getElementById("sensor-id").value,
+      start_timestamp: document.getElementById("sensor-start").value,
+      end_timestamp: document.getElementById("sensor-end").value,
+      value: parseFloat(document.getElementById("sensor-value").value),
+      unit: document.getElementById("sensor-unit").value
+    };
+    fetch("/api/sensor/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    })
+      .then(res => res.json())
+      .then(msg => {
+        document.getElementById("sensor-submit-status").textContent = msg.message;
+      });
+  });
+
+  // 🧹 Purge Old Sensor Data
+  document.getElementById("purge-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const before = document.getElementById("purge-before").value;
+    fetch(`/api/sensor/purge/?before=${encodeURIComponent(before)}`, { method: "DELETE" })
+      .then(res => res.json())
+      .then(msg => {
+        document.getElementById("purge-status").textContent = msg.message;
+      })
+      .catch(() => {
+        document.getElementById("purge-status").textContent = "Deletion failed.";
+      });
+  });
+
+  // 📋 Load Sensor Table (Admin View)
+  function loadSensorData() {
+    fetch("/api/sensor/admin/sensors")
+      .then(response => response.json())
+      .then(data => {
+        const tbody = document.querySelector("#sensor-table tbody");
+        tbody.innerHTML = "";
+        data.forEach(row => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${row["Sensor ID"]}</td>
+            <td>${row["Start Timestamp"]}</td>
+            <td>${row["End Timestamp"]}</td>
+            <td>${row["Value"]}</td>
+            <td>${row["Unit"]}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      })
+      .catch(err => {
+        console.error("Failed to load sensor data:", err);
+      });
+  }
+
+  // 📦 Populate Sensor Dropdown for ML Export
+  fetch('/ml/sensors')
+    .then(res => res.json())
+    .then(sensors => {
+      const dropdown = document.getElementById("sensor-select");
+      dropdown.innerHTML = "";
+      sensors.forEach(sensor => {
+        const option = document.createElement("option");
+        option.value = sensor;
+        option.textContent = sensor;
+        dropdown.appendChild(option);
+      });
+    })
+    .catch(() => {
+      const dropdown = document.getElementById("sensor-select");
+      dropdown.innerHTML = "<option value=''>❌ Failed to load sensors</option>";
+    });
+
+  // 📥 Download ML Training Set
+  function downloadTrainingSet() {
+    const sensorId = document.getElementById("sensor-select").value;
+    const start = document.getElementById("start-time").value;
+    const end = document.getElementById("end-time").value;
+
+    if (!sensorId || !start || !end) {
+      document.getElementById("export-status").textContent = "❌ Please select sensor and time range.";
+      return;
+    }
+
+    const url = `${window.location.origin}/ml/sensor?sensor_id=${encodeURIComponent(sensorId)}&start=${start}&end=${end}`;
+
+    fetch(url)
+      .then(response => {
+        if (!response.ok) throw new Error("Dataset fetch failed");
+        return response.blob();
+      })
+      .then(blob => {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "training_data.csv";
+        link.click();
+        document.getElementById("export-status").textContent = "✅ Dataset downloaded successfully.";
+      })
+      .catch(err => {
+        console.error(err);
+        document.getElementById("export-status").textContent = "❌ Failed to download dataset.";
+      });
+  }
+
+  // 🎥 Video Upload
+  document.getElementById("video-upload-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const fileInput = document.getElementById("video-file");
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append("file", file);
+
+    fetch("/api/video/", {
+      method: "POST",
+      body: formData
+    })
       .then(res => res.json())
       .then(data => {
-        const body = document.getElementById("sensor-table-body");
-        body.innerHTML = "";
-        data.data.forEach(row => {
-          const tr = document.createElement("tr");
-          let sensorId;
-          row.forEach((cell, i) => {
-            const td = document.createElement("td");
-            td.textContent = cell;
-            tr.appendChild(td);
-            if (i === 0) sensorId = cell;
-          });
+        document.getElementById("video-upload-status").textContent = data.message;
+        fileInput.value = "";
+      })
+      .catch(err => {
+        document.getElementById("video-upload-status").textContent = "Upload failed.";
+      });
+  });
 
-          const deleteTd = document.createElement("td");
+  // 🎬 Load Videos
+  fetch('/api/admin/videos')
+    .then(res => res.json())
+    .then(files => {
+      const body = document.getElementById("video-table-body");
+      body.innerHTML = "";
+      if (Array.isArray(files) && files.length > 0) {
+        files.forEach(filename => {
+          const tr = document.createElement("tr");
+
+          const nameCell = document.createElement("td");
+          nameCell.textContent = filename;
+
+          const linkCell = document.createElement("td");
+          const previewLink = document.createElement("a");
+          previewLink.href = `/api/video/${filename}`;
+          previewLink.textContent = "▶ Watch";
+          previewLink.target = "_blank";
+          linkCell.appendChild(previewLink);
+
+          const deleteCell = document.createElement("td");
           const deleteBtn = document.createElement("button");
           deleteBtn.textContent = "🗑 Delete";
           deleteBtn.onclick = () => {
-            fetch(`/api/sensor/${sensorId}/`, { method: "DELETE" })
+            fetch(`/api/video/${filename}`, { method: "DELETE" })
               .then(res => res.json())
               .then(msg => {
                 alert(msg.message);
                 tr.remove();
-              })
-              .catch(() => {
-                alert("Failed to delete sensor entry.");
               });
           };
-          deleteTd.appendChild(deleteBtn);
-          tr.appendChild(deleteTd);
+          deleteCell.appendChild(deleteBtn);
 
+          tr.appendChild(nameCell);
+          tr.appendChild(linkCell);
+          tr.appendChild(deleteCell);
           body.appendChild(tr);
         });
-      });
-
-      // Purge Old Sensor Data
-    document.getElementById("purge-form").addEventListener("submit", e => {
-      e.preventDefault();
-      const before = document.getElementById("purge-before").value;
-      const url = `/api/sensor/purge/?before=${encodeURIComponent(before)}`;
-
-      fetch(url, { method: "DELETE" })
-        .then(res => res.json())
-        .then(msg => {
-          document.getElementById("purge-status").textContent = msg.message;
-        })
-        .catch(() => {
-          document.getElementById("purge-status").textContent = "Deletion failed.";
-        });
+      } else {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 3;
+        td.textContent = "No videos found.";
+        tr.appendChild(td);
+        body.appendChild(tr);
+      }
     });
-    function downloadTrainingSet() {
-  const start = "2023-04-01T00:00:00";
-  const end = "2023-04-01T01:00:00";
-  const url = `/ml/sensor?sensor_id=accel_01&start=${start}&end=${end}`;
 
-  fetch(url)
-    .then(response => {
-      if (!response.ok) throw new Error("Dataset fetch failed");
-      return response.blob();
-    })
-    .then(blob => {
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = "training_data.csv";
-      link.click();
-      document.getElementById("export-status").textContent = "✅ Dataset downloaded successfully.";
-    })
-    .catch(err => {
-      console.error(err);
-      document.getElementById("export-status").textContent = "❌ Failed to download dataset.";
-    });
-}
-
-
-    // Video Upload
-    document.getElementById("video-upload-form").addEventListener("submit", e => {
-      e.preventDefault();
-      const fileInput = document.getElementById("video-file");
-      const file = fileInput.files[0];
-      const formData = new FormData();
-      formData.append("file", file);
-
-      fetch("/api/video/", {
-        method: "POST",
-        body: formData
+  // ⏱ Fetch Sensor Time Range for ML Export
+  function fetchSensorTimeRange(sensorId) {
+    if (!sensorId) return;
+    const url = `${window.location.origin}/api/sensor-range?sensor_id=${encodeURIComponent(sensorId)}`;
+    fetch(url)
+      .then(response => {
+        if (!response.ok) throw new Error("Failed to fetch time range");
+        return response.json();
       })
-        .then(res => res.json())
-        .then(data => {
-          document.getElementById("video-upload-status").textContent = data.message;
-          fileInput.value = "";
-        })
-        .catch(err => {
-          document.getElementById("video-upload-status").textContent = "Upload failed.";
-        });
-    });
-
-    // Load Videos
-    fetch('/api/admin/videos')
-      .then(res => res.json())
-      .then(files => {
-        const body = document.getElementById("video-table-body");
-        body.innerHTML = "";
-        if (Array.isArray(files) && files.length > 0) {
-          files.forEach(filename => {
-            const tr = document.createElement("tr");
-
-            const nameCell = document.createElement("td");
-            nameCell.textContent = filename;
-
-            const linkCell = document.createElement("td");
-            const previewLink = document.createElement("a");
-            previewLink.href = `/api/video/${filename}`;
-            previewLink.textContent = "▶ Watch";
-            previewLink.target = "_blank";
-            linkCell.appendChild(previewLink);
-
-            const deleteCell = document.createElement("td");
-            const deleteBtn = document.createElement("button");
-            deleteBtn.textContent = "🗑 Delete";
-            deleteBtn.onclick = () => {
-              fetch(`/api/video/${filename}`, { method: "DELETE" })
-                .then(res => res.json())
-                .then(msg => {
-                  alert(msg.message);
-                  tr.remove();
-                });
-            };
-            deleteCell.appendChild(deleteBtn);
-
-            tr.appendChild(nameCell);
-            tr.appendChild(linkCell);
-            tr.appendChild(deleteCell);
-            body.appendChild(tr);
-          });
-        } else {
-          const tr = document.createElement("tr");
-          const td = document.createElement("td");
-          td.colSpan = 3;
-          td.textContent = "No videos found.";
-          tr.appendChild(td);
-          body.appendChild(tr);
-        }
+      .then(data => {
+        document.getElementById("start-time").value = formatDateTimeLocal(data.start);
+        document.getElementById("end-time").value = formatDateTimeLocal(data.end);
+      })
+      .catch(err => {
+        console.error(err);
+        document.getElementById("start-time").value = "";
+        document.getElementById("end-time").value = "";
       });
-  </script>
+  }
+
+  // 🕒 Format ISO to datetime-local
+  function formatDateTimeLocal(isoString) {
+    const date = new Date(isoString);
+    return date.toISOString().slice(0, 16);
+  }
+
+  // 🚀 Load on Page Ready
+  window.onload = () => {
+    loadSensorData();
+  };
+</script>
 
 </body>
 </html>
