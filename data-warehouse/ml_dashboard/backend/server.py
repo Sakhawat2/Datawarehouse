@@ -1,3 +1,4 @@
+# type: ignore
 import os
 import csv
 import logging
@@ -116,3 +117,63 @@ def login(user: UserLogin, db: Session = Depends(auth.get_db)):
 @app.get("/api/protected")
 def protected(current_user: models.User = Depends(auth.get_current_active_user)):
     return {"msg": f"Welcome {current_user.username}, your role is {current_user.role}"}
+
+
+# Sensor distribution
+@app.get("/api/admin/sensor-distribution")
+def sensor_distribution():
+    import pandas as pd
+    file_path = "storage/sensors/sensor_data.csv"
+    if not os.path.exists(file_path):
+        return []
+
+    df = pd.read_csv(file_path, encoding='latin1', on_bad_lines='skip')
+    df.columns = df.columns.str.strip()
+    counts = df["Sensor ID"].value_counts().to_dict()
+    return counts
+
+
+# Allow frontend to access backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Use specific origin in production
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/sensor-data")
+def get_sensor_data():
+    # Simulated data; replace with real DB query or sensor input
+    return {
+        "name": "temp_1",
+        "labels": ["00:00", "06:00", "12:00", "18:00", "24:00"],
+        "data": [28, 42, 55, 38, 65]
+    }
+
+@app.get("/sensors")
+def get_sensors():
+    # Simulated list; replace with DB query if needed
+    return ["temp_1", "temp_2", "humidity_1", "pressure_1", "accel_01", "Temp_Sensor_3"]
+
+# Storage 
+@app.get("/storage-breakdown")
+def get_storage_breakdown():
+    base_folder = "storage"  # or your actual folder
+    categories = {
+        "Sensor DB": "sensor_db",
+        "Video Files": "videos",
+        "Other Files": "others"
+    }
+
+    breakdown = {}
+    for label, folder in categories.items():
+        path = os.path.join(base_folder, folder)
+        size = 0
+        if os.path.exists(path):
+            for f in os.listdir(path):
+                fp = os.path.join(path, f)
+                if os.path.isfile(fp):
+                    size += os.path.getsize(fp)
+        breakdown[label] = round(size / (1024 * 1024), 2)  # MB
+
+    return breakdown

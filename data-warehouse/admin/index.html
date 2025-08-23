@@ -11,6 +11,8 @@
       background-color: #f9f9f9;
       color: #333;
     }
+
+   
     h1 {
       margin-bottom: 10px;
       color: #2c3e50;
@@ -40,8 +42,8 @@
     }
     .chart-container {
       width: 400px;
-      margin-top: 10px;
-      margin-bottom: 10px;
+      margin: 0 ;
+      padding: 0;
     }
     a {
       color: #2980b9;
@@ -58,18 +60,56 @@
       padding: 6px;
       margin: 4px;
     }
+    
+
+    #sensorLineChart {
+     max-width: 700px;
+     max-height: 400px;
+     margin: 0;
+     margin-left: 0;
+     display: block;
+
+    
+
+  #storageChart {
+    width: 400px !important;
+    height: 140px !important;
+    margin-bottom: 0;
+  }
+
+  form {
+    margin-top: 10px;
+    margin-bottom: 10px;
+  }
+
+  input, button {
+    padding: 6px;
+    margin: 4px;
+  }
+   
+}
   </style>
 </head>
-<body>
-  
+<body>  
 
   <h1>📦 Data Warehouse Admin Dashboard</h1>
-  <p><strong>Total Used Storage:</strong> <span id="storage-total">Loading...</span> MB</p>
+  <p><strong>Total Used Storage:</strong> <span id="storage-total">Loading...</span> MB</p> 
+<canvas id="storageChart" width="400" height="200"></canvas>
+  
+
+  
+
+<h2>📈 Sensor Analytics</h2>
 
   <div class="chart-container">
-    <canvas id="typeChart"></canvas>
-  </div>
+  <canvas id="sensorPieChart" width="400" height="400"></canvas>
+</div>
 
+  <select id="sensorSelector"></select>
+<canvas id="sensorLineChart"></canvas>
+
+  
+  
   <h2>📊 Sensor Data</h2>
   <table id="sensor-table" border="1">
     <thead>
@@ -80,8 +120,8 @@
        <th>Value</th>
        <th>Unit</th>
      </tr>
-    </thead>
-    <tbody></tbody>
+   </thead>
+   <tbody></tbody>
     </table>
 
     <tbody id="sensor-table-body">
@@ -148,32 +188,33 @@
 
   <button onclick="downloadTrainingSet()">Export Dataset</button>
   <p id="export-status"></p>
-
   
 
 
   
  <script>
   // 📊 Load Storage Stats + Chart
-  fetch('/api/admin/stats')
-    .then(res => res.json())
-    .then(data => {
-      document.getElementById("storage-total").textContent = data.total_storage;
-      const ctx = document.getElementById("typeChart").getContext("2d");
-      new Chart(ctx, {
-        type: 'pie',
-        data: {
-          labels: ['Sensor DB', 'Video Files', 'Other Files'],
-          datasets: [{
-            data: [data.sensor_storage, data.video_storage, data.other_storage],
-            backgroundColor: ['#3498db', '#e74c3c', '#2ecc71'],
-          }]
-        },
-        options: {
-          plugins: { legend: { position: 'bottom' } }
-        }
-      });
+fetch('/api/admin/stats')
+  .then(res => res.json())
+  .then(data => {
+    document.getElementById("storage-total").textContent = data.total_storage;
+    const ctx = document.getElementById("typeChart").getContext("2d");
+    new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: ['Sensor DB', 'Video Files', 'Other Files'],
+        datasets: [{
+          data: [data.sensor_storage, data.video_storage, data.other_storage],
+          backgroundColor: ['#3498db', '#e74c3c', '#2ecc71'],
+        }]
+      },
+      options: {
+        plugins: { legend: {
+          display: true,
+          position: 'bottom' } }
+      }
     });
+  });
 
   // 📥 Sensor Upload
   document.getElementById("sensor-form").addEventListener("submit", e => {
@@ -232,6 +273,7 @@
       .catch(err => {
         console.error("Failed to load sensor data:", err);
       });
+
   }
 
   // 📦 Populate Sensor Dropdown for ML Export
@@ -383,7 +425,180 @@
   window.onload = () => {
     loadSensorData();
   };
+
+  // 📈 Sensor Distribution Pie Chart
+fetch('/api/admin/sensor-distribution')
+  .then(res => res.json())
+  .then(data => {
+    const ctx = document.getElementById("sensorPieChart").getContext("2d");
+    new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: Object.keys(data),
+        datasets: [{
+          data: Object.values(data),
+          backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#33A383'],
+        }]
+      },
+      options: {
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  })
+  .catch(err => {
+    console.error("Failed to load sensor distribution:", err);
+  });
+
+
+  let sensorLineChart = null; // Store chart instance globally
+
+  // Fetch and render chart for selected sensor
+  async function fetchSensorData(sensorName) {
+    const response = await fetch(`http://localhost:8000/sensor-data?sensor=${encodeURIComponent(sensorName)}`);
+    const sensorData = await response.json();
+
+    const lineCtx = document.getElementById('sensorLineChart').getContext('2d');
+
+    // Destroy previous chart if it exists
+    if (sensorLineChart) {
+      sensorLineChart.destroy();
+    }
+
+    // Create new chart
+    sensorLineChart = new Chart(lineCtx, {
+      type: 'line',
+      data: {
+        labels: sensorData.labels,
+        datasets: [{
+          label: sensorData.name,
+          data: sensorData.data,
+          borderColor: '#2980b9',
+          backgroundColor: 'rgba(41, 128, 185, 0.2)',
+          fill: true,
+          tension: 0.4
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: `${sensorData.name} - Daily Trend`
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    });
+  }
+
+  // Load sensor list and populate dropdown
+  async function loadSensorOptions() {
+    const response = await fetch("http://localhost:8000/sensors");
+    const sensors = await response.json();
+
+    const selector = document.getElementById("sensorSelector");
+    selector.innerHTML = ""; // Clear existing options
+
+    sensors.forEach(sensor => {
+      const option = document.createElement("option");
+      option.value = sensor;
+      option.textContent = sensor;
+      selector.appendChild(option);
+    });
+
+    // Load chart for first sensor by default
+    if (sensors.length > 0) {
+      selector.value = sensors[0];
+      fetchSensorData(sensors[0]);
+    }
+  }
+
+  // Listen for dropdown changes
+  document.addEventListener("DOMContentLoaded", () => {
+    document.getElementById("sensorSelector").addEventListener("change", (e) => {
+      fetchSensorData(e.target.value);
+    });
+
+    loadSensorOptions(); // Initialize dropdown and chart
+  });
+
+  // Storage
+  async function updateStorageDisplay() {
+  try {
+    const response = await fetch("/storage-breakdown");
+    const data = await response.json();
+
+    // Update total storage
+    const total = Object.values(data).reduce((a, b) => a + b, 0);
+    document.getElementById("storage-total").textContent = total.toFixed(2);
+
+    // Draw chart
+    const ctx = document.getElementById("storageChart").getContext("2d");
+    new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: Object.keys(data),
+        datasets: [{
+          label: 'Used Storage (MB)',
+          data: Object.values(data),
+          backgroundColor: ['#3498db', '#e74c3c', '#2ecc71']
+        }]
+      },
+      options: {
+  responsive: false,
+  maintainAspectRatio: false,
+  layout: {
+    padding: {
+      top: 0,
+      bottom: 0
+    }
+  },
+  plugins: {
+    legend: {
+      display: true,
+      position: 'bottom',
+      labels: {
+        boxWidth: 20,
+        padding: 5 // reduce spacing between legend items
+      }
+    }
+  },
+  scales: {
+    y: {
+      beginAtZero: true,
+      ticks: {
+        font: { size: 10 }
+      }
+    },
+    x: {
+      ticks: {
+        font: { size: 10 }
+      }
+    }
+  }
+}
+
+    });
+  } catch (err) {
+    document.getElementById("storage-total").textContent = "Error";
+    console.error("Failed to load storage data:", err);
+  }
+}
+
+updateStorageDisplay();
 </script>
+  
+
+
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="module" src="/static/main.js"></script>
+
 
 </body>
 </html>

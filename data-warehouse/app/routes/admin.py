@@ -28,3 +28,19 @@ def get_sensor_data():
         for row in rows
     ]
     return data
+
+@router.get("/api/admin/sensor-timeline")
+async def get_sensor_timeline():
+    # Dummy data for testing
+    timestamps = [(datetime.now() - timedelta(hours=i)).strftime("%Y-%m-%d %H:%M") for i in range(10)][::-1]
+    datasets = [
+        {
+            "label": "Sensor A",
+            "values": [12, 15, 14, 18, 20, 22, 21, 19, 17, 16]
+        },
+        {
+            "label": "Sensor B",
+            "values": [8, 9, 11, 10, 13, 12, 14, 13, 12, 11]
+        }
+    ]
+    return { "timestamps": timestamps, "datasets": datasets }
