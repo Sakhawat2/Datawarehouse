@@ -2,7 +2,7 @@
 import os
 import csv
 import logging
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException,Query
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -141,19 +141,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# New
+CSV_PATH = os.path.join("storage", "sensors", "sensor_data.csv")
+# Simulated sensor data
 @app.get("/sensor-data")
-def get_sensor_data():
-    # Simulated data; replace with real DB query or sensor input
+def get_sensor_data(sensor: str = Query(...)):
+    labels = []
+    values = []
+
+    try:
+        with open(CSV_PATH, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                if row["Sensor ID"] == sensor:
+                    labels.append(row["Start Timestamp"])
+                    values.append(float(row["Value"]))
+    except FileNotFoundError:
+        return JSONResponse(content={"error": "CSV file not found"}, status_code=500)
+
+    if not labels:
+        return JSONResponse(content={"error": "Sensor not found"}, status_code=404)
+
     return {
-        "name": "temp_1",
-        "labels": ["00:00", "06:00", "12:00", "18:00", "24:00"],
-        "data": [28, 42, 55, 38, 65]
+        "name": sensor,
+        "labels": labels,
+        "data": values
     }
 
 @app.get("/sensors")
 def get_sensors():
-    # Simulated list; replace with DB query if needed
-    return ["temp_1", "temp_2", "humidity_1", "pressure_1", "accel_01", "Temp_Sensor_3"]
+    sensors = set()
+    try:
+        with open(CSV_PATH, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                sensors.add(row["Sensor ID"])
+    except FileNotFoundError:
+        return JSONResponse(content={"error": "CSV file not found"}, status_code=500)
+
+    return list(sensors)
 
 # Storage 
 @app.get("/storage-breakdown")
@@ -177,3 +203,5 @@ def get_storage_breakdown():
         breakdown[label] = round(size / (1024 * 1024), 2)  # MB
 
     return breakdown
+    
+

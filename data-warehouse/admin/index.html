@@ -101,12 +101,13 @@
 
 <h2>📈 Sensor Analytics</h2>
 
-  <div class="chart-container">
+ <div class="chart-container">
   <canvas id="sensorPieChart" width="400" height="400"></canvas>
 </div>
 
+
   <select id="sensorSelector"></select>
-<canvas id="sensorLineChart"></canvas>
+  <canvas id="sensorLineChart"></canvas>
 
   
   
@@ -450,27 +451,48 @@ fetch('/api/admin/sensor-distribution')
   });
 
 
-  let sensorLineChart = null; // Store chart instance globally
+// 📊 Sensor Line Chart with Dropdown
 
-  // Fetch and render chart for selected sensor
-  async function fetchSensorData(sensorName) {
+let sensorLineChart = null; // Store chart instance globally
+
+// Fetch and render chart for selected sensor
+async function fetchSensorData(sensorName) {
+  try {
     const response = await fetch(`http://localhost:8000/sensor-data?sensor=${encodeURIComponent(sensorName)}`);
     const sensorData = await response.json();
 
-    const lineCtx = document.getElementById('sensorLineChart').getContext('2d');
+    // Validate data
+    if (!sensorData || !sensorData.labels || !sensorData.data || sensorData.labels.length === 0 || sensorData.data.length === 0) {
+      console.warn("No data available for sensor:", sensorName);
+      return;
+    }
+
+    const canvas = document.getElementById('sensorLineChart');
+    if (!canvas) {
+      console.error("Canvas element with ID 'sensorLineChart' not found.");
+      return;
+    }
+
+    const lineCtx = canvas.getContext('2d');
 
     // Destroy previous chart if it exists
     if (sensorLineChart) {
       sensorLineChart.destroy();
     }
 
+    // Format labels as time strings
+    const formattedLabels = sensorData.labels.map(label => {
+      const date = new Date(label);
+      return isNaN(date) ? label : date.toLocaleTimeString();
+    });
+
     // Create new chart
     sensorLineChart = new Chart(lineCtx, {
       type: 'line',
       data: {
-        labels: sensorData.labels,
+        labels: formattedLabels,
         datasets: [{
-          label: sensorData.name,
+          label: sensorData.name || "Sensor Data",
           data: sensorData.data,
           borderColor: '#2980b9',
           backgroundColor: 'rgba(41, 128, 185, 0.2)',
@@ -483,24 +505,43 @@ fetch('/api/admin/sensor-distribution')
         plugins: {
           title: {
             display: true,
-            text: `${sensorData.name} - Daily Trend`
+            text: `${sensorData.name || "Sensor"} - Daily Trend`
           }
         },
         scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Time'
+            }
+          },
           y: {
-            beginAtZero: true
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Value'
+            }
           }
         }
       }
     });
+  } catch (error) {
+    console.error("Error fetching sensor data:", error);
   }
+}
 
-  // Load sensor list and populate dropdown
-  async function loadSensorOptions() {
+// Load sensor list and populate dropdown
+async function loadSensorOptions() {
+  try {
     const response = await fetch("http://localhost:8000/sensors");
     const sensors = await response.json();
 
     const selector = document.getElementById("sensorSelector");
+    if (!selector) {
+      console.error("Dropdown element with ID 'sensorSelector' not found.");
+      return;
+    }
+
     selector.innerHTML = ""; // Clear existing options
 
     sensors.forEach(sensor => {
@@ -515,16 +556,22 @@ fetch('/api/admin/sensor-distribution')
       selector.value = sensors[0];
       fetchSensorData(sensors[0]);
     }
+  } catch (error) {
+    console.error("Error loading sensor options:", error);
   }
+}
 
-  // Listen for dropdown changes
-  document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("sensorSelector").addEventListener("change", (e) => {
+// Listen for dropdown changes
+document.addEventListener("DOMContentLoaded", () => {
+  const selector = document.getElementById("sensorSelector");
+  if (selector) {
+    selector.addEventListener("change", (e) => {
       fetchSensorData(e.target.value);
     });
+  }
 
-    loadSensorOptions(); // Initialize dropdown and chart
-  });
+  loadSensorOptions(); // Initialize dropdown and chart
+});
 
   // Storage
   async function updateStorageDisplay() {
@@ -532,11 +579,21 @@ fetch('/api/admin/sensor-distribution')
     const response = await fetch("/storage-breakdown");
     const data = await response.json();
 
+    console.log("Storage breakdown:", data);
+
+    // Validate data
+    if (!data || typeof data !== "object") {
+      throw new Error("Invalid storage data");
+    }
+
     // Update total storage
     const total = Object.values(data).reduce((a, b) => a + b, 0);
-    document.getElementById("storage-total").textContent = total.toFixed(2);
+    const totalDisplay = document.getElementById("storage-total");
+    if (totalDisplay) {
+      totalDisplay.textContent = total.toFixed(2);
+    }
 
-    // Draw chart
+    // Draw pie chart
     const ctx = document.getElementById("storageChart").getContext("2d");
     new Chart(ctx, {
       type: 'pie',
@@ -549,49 +606,35 @@ fetch('/api/admin/sensor-distribution')
         }]
       },
       options: {
-  responsive: false,
-  maintainAspectRatio: false,
-  layout: {
-    padding: {
-      top: 0,
-      bottom: 0
-    }
-  },
-  plugins: {
-    legend: {
-      display: true,
-      position: 'bottom',
-      labels: {
-        boxWidth: 20,
-        padding: 5 // reduce spacing between legend items
+        responsive: false,
+        maintainAspectRatio: false,
+        layout: { padding: { top: 0, bottom: 0 } },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom',
+            labels: { boxWidth: 20, padding: 5 }
+          }
+        }
       }
-    }
-  },
-  scales: {
-    y: {
-      beginAtZero: true,
-      ticks: {
-        font: { size: 10 }
-      }
-    },
-    x: {
-      ticks: {
-        font: { size: 10 }
-      }
-    }
-  }
-}
-
     });
+
+    // Optional: draw bar chart if fileCountConfig is defined
+    if (typeof fileCountConfig !== "undefined") {
+      new Chart(document.getElementById('fileCountBarChart'), fileCountConfig);
+    }
+
   } catch (err) {
-    document.getElementById("storage-total").textContent = "Error";
     console.error("Failed to load storage data:", err);
+    const totalDisplay = document.getElementById("storage-total");
+    if (totalDisplay) {
+      totalDisplay.textContent = "Error";
+    }
   }
 }
 
 updateStorageDisplay();
-</script>
-  
+
 
 
 </script>
