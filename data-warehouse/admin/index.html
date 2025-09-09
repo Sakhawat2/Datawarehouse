@@ -40,74 +40,117 @@
     tr:hover {
       background-color: #f1f1f1;
     }
-    .chart-container {
-      width: 400px;
-      margin: 0 ;
-      padding: 0;
-    }
-    a {
-      color: #2980b9;
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
-    form {
-      margin-top: 10px;
-      margin-bottom: 10px;
-    }
-    input, button {
-      padding: 6px;
-      margin: 4px;
-    }
-    
 
-    #sensorLineChart {
-     max-width: 700px;
-     max-height: 400px;
-     margin: 0;
-     margin-left: 0;
-     display: block;
-
-    
-
-  #storageChart {
-    width: 400px !important;
-    height: 140px !important;
-    margin-bottom: 0;
-  }
-
-  form {
-    margin-top: 10px;
-    margin-bottom: 10px;
-  }
-
-  input, button {
-    padding: 6px;
-    margin: 4px;
-  }
-   
+.chart-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px; /* Reduced from 30px to 10px */
+  width: 100%;
 }
+
+.chart-box.pie-chart {
+  flex: 0 0 250px; /* Keep pie chart compact */
+  margin-left: 100px; /* Push pie chart slightly to the right */
+}
+
+.chart-box.line-chart {
+  flex: 1.2; /* Line chart still gets more space */
+  display: flex;
+  flex-direction: column;
+  margin-right: 100px; /* Pull line chart slightly to the left */
+}
+
+.line-chart-container {
+  width: 100%;
+}
+
+#sensorLineChart {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
+}
+
+
+.storage-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.chart-box {
+  flex: 1;
+  max-width: 32%;
+  min-width: 280px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.chart-box canvas {
+  width: 300px !important;
+  height: 300px !important;
+}
+
+
   </style>
 </head>
 <body>  
+  <h1>📊 Data Warehouse Admin Dashboard</h1>
+  <p>Welcome to the admin dashboard. Here you can monitor storage usage, manage sensor data, and handle video uploads.</p>
 
-  <h1>📦 Data Warehouse Admin Dashboard</h1>
-  <p><strong>Total Used Storage:</strong> <span id="storage-total">Loading...</span> MB</p> 
-<canvas id="storageChart" width="400" height="200"></canvas>
+ <h2>📦 Storage Overview</h2>
+
+
+<!-- Total Storage Display -->
+<p><strong>Total Used Storage:</strong> <span id="storage-total">Loading...</span> MB</p>
+
+<!-- Chart Row -->
+<div class="storage-row">
+  <!-- Pie Chart: Storage Breakdown -->
+  <div class="chart-box">
+    <h4>Storage Breakdown</h4>
+    <canvas id="storageChart" width="300" height="300"></canvas>
+  </div>
+
+  <!-- Bar Chart: Sensor Count -->
+  <div class="chart-box">
+    <h4>Sensor Count</h4>
+    <canvas id="sensorCountBarChart" width="300" height="300"></canvas>
+  </div>
+
+  <!-- Bar Chart: Video Count -->
+  <div class="chart-box">
+    <h4>Video Count by Size</h4>
+    <canvas id="videoCountBarChart" width="300" height="300"></canvas>
+  </div>
+</div>
+
+
   
 
   
 
 <h2>📈 Sensor Analytics</h2>
 
- <div class="chart-container">
-  <canvas id="sensorPieChart" width="400" height="400"></canvas>
-</div>
+ <div class="chart-row">
+  <div class="chart-box pie-chart">
+    <canvas id="sensorPieChart"></canvas>
+  </div>
 
+  <div class="chart-box line-chart">
+    <label for="sensorSelector"><strong>Select Sensor:</strong></label>
+    <select id="sensorSelector"></select>
+    <div class="line-chart-container">
+      <canvas id="sensorLineChart"></canvas>
+    </div>
+  </div>
+ </div>
 
-  <select id="sensorSelector"></select>
-  <canvas id="sensorLineChart"></canvas>
 
   
   
@@ -636,11 +679,139 @@ document.addEventListener("DOMContentLoaded", () => {
 updateStorageDisplay();
 
 
+// Sensor Count Bar Chart
+function updateSensorChart(chart) {
+  fetch('/api/admin/sensor-count')
+    .then(res => res.json())
+    .then(data => {
+      console.log("Sensor Count Data:", data); // Debug log
+
+      const labels = Object.keys(data);
+      const values = Object.values(data);
+
+      if (labels.length && values.length) {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = values;
+        chart.update();
+      } else {
+        console.warn("Sensor Count API returned empty data.");
+      }
+    })
+    .catch(err => {
+      console.error("Sensor Count fetch error:", err);
+    });
+}
+
+function updateVideoChart(chart) {
+  fetch('/api/admin/video-storage')
+    .then(res => res.json())
+    .then(data => {
+      console.log("Video Storage Data:", data); // Debug log
+
+      const fileSizes = data.files; // ✅ Use only the 'files' object
+      const labels = Object.keys(fileSizes); // File names
+      const values = Object.values(fileSizes); // File sizes in MB
+
+      if (labels.length && values.length) {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = values;
+        chart.data.datasets[0].label = 'Size (MB)'; // Optional: update label
+        chart.update();
+      } else {
+        console.warn("Video Storage API returned empty file data.");
+      }
+    })
+    .catch(err => {
+      console.error("Video Storage fetch error:", err);
+    });
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  const sensorCtx = document.getElementById("sensorCountBarChart").getContext("2d");
+  const videoCtx = document.getElementById("videoCountBarChart").getContext("2d");
+
+  const sensorChart = new Chart(sensorCtx, {
+    type: 'bar',
+    data: {
+      labels: ['Loading...'],
+      datasets: [{
+        label: 'Sensor Count',
+        data: [0],
+        backgroundColor: '#3498db'
+      }]
+    },
+    options: {
+      plugins: {
+        title: {
+          display: true,
+          text: 'Sensor Count by Type'
+        }
+      },
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+
+  const videoChart = new Chart(videoCtx, {
+  type: 'bar',
+  data: {
+    labels: ['Loading...'],
+    datasets: [{
+      label: 'Size (MB)',
+      data: [0],
+      backgroundColor: '#e74c3c' // Red like your example
+    }]
+  },
+  options: {
+    plugins: {
+      title: {
+        display: true,
+        text: 'Video File Sizes'
+      },
+      tooltip: {
+        callbacks: {
+          label: context => `${context.label}: ${context.raw} MB`
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: 'Size (MB)'
+        },
+        ticks: {
+          stepSize: 5
+        }
+      },
+      x: {
+        title: {
+          display: true,
+          text: 'Files'
+        }
+      }
+    }
+  }
+});
+
+  // Initial load
+  updateSensorChart(sensorChart);
+  updateVideoChart(videoChart);
+
+  // Refresh every 10 seconds
+  setInterval(() => {
+    updateSensorChart(sensorChart);
+    updateVideoChart(videoChart);
+  }, 10000);
+});
 
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script type="module" src="/static/main.js"></script>
+<script src="/main.js"></script> <!-- Adjust path if needed -->
 
 
 </body>

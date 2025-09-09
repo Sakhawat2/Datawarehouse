@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from collections import Counter
 
 # Core app modules
 from app import models, database, auth
@@ -204,4 +205,55 @@ def get_storage_breakdown():
 
     return breakdown
     
+# Storage sensor count
+    
 
+@app.get("/api/admin/sensor-count")
+def get_sensor_count():
+    file_path = os.path.abspath("storage/sensors/sensor_data.csv")
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="CSV file not found")
+
+    try:
+        with open(file_path, mode="r", encoding="latin1") as f:
+            reader = csv.DictReader(f)
+            sensor_ids = [row["Sensor ID"] for row in reader if "Sensor ID" in row]
+
+        count_by_sensor = dict(Counter(sensor_ids))
+        return JSONResponse(content=count_by_sensor)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading CSV: {str(e)}")
+    
+# storage Video storage sizes
+
+@app.get("/api/admin/video-storage")
+def get_video_storage():
+    video_dir = "storage/videos"
+    size_buckets = {"Small": 0, "Medium": 0, "Large": 0}
+    file_sizes = {}  # New: store individual file sizes
+
+    if not os.path.exists(video_dir):
+        return JSONResponse(content={
+            "buckets": size_buckets,
+            "files": file_sizes
+        })
+
+    for filename in os.listdir(video_dir):
+        path = os.path.join(video_dir, filename)
+        if os.path.isfile(path):
+            size_mb = round(os.path.getsize(path) / (1024 * 1024), 2)
+            file_sizes[filename] = size_mb
+
+            if size_mb < 10:
+                size_buckets["Small"] += 1
+            elif size_mb < 100:
+                size_buckets["Medium"] += 1
+            else:
+                size_buckets["Large"] += 1
+
+    return JSONResponse(content={
+        "buckets": size_buckets,
+        "files": file_sizes
+    })
