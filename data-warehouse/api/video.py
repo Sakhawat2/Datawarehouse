@@ -1,35 +1,34 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import FileResponse
-import os
+from fastapi import APIRouter, UploadFile, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from app.storage.minio_client import client, BUCKET
+from app.authz import require_role
+import uuid
 
-from fastapi.staticfiles import StaticFiles
 
-video_router = APIRouter()
+video_router = APIRouter(prefix='/api/video', tags=['Videos'])
 
-@video_router.post("/")
-async def upload_video(file: UploadFile = File(...)):
-    if not file.content_type.startswith("video/"):
-        raise HTTPException(status_code=400, detail="Invalid file type. Only video files are allowed.")
 
-    os.makedirs("storage/videos", exist_ok=True)
-    file_path = os.path.join("storage/videos", file.filename)
+@video_router.post('/')
+async def upload_video(file: UploadFile, user=Depends(require_role('user'))):
+key = f"{uuid.uuid4()}-{file.filename}"
+size = 0
+data = await file.read()
+size = len(data)
+client.put_object(BUCKET, key, io.BytesIO(data), length=size, content_type=file.content_type)
+# save DB row (id, key, size, owner_id)
+return { 'message': 'uploaded', 'key': key }
 
-    try:
-        with open(file_path, "wb") as f:
-            contents = await file.read()
-            f.write(contents)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-    return {
-        "message": "✅ Video uploaded successfully",
-        "filename": file.filename,
-        "path": file_path
-    }
-@video_router.get("/{filename}")
-def get_video(filename: str):
-    file_path = os.path.join("storage/videos", filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Video not found")
-    return FileResponse(file_path, media_type="video/mp4")
+@video_router.get('/{key}')
+async def get_video(key: str):
+try:
+obj = client.get_object(BUCKET, key)
+return StreamingResponse(obj, media_type='video/mp4')
+except Exception:
+raise HTTPException(404, 'Not found')
 
+
+@video_router.delete('/{key}')
+async def delete_video(key: str, user=Depends(require_role('admin'))):
+client.remove_object(BUCKET, key)
+return { 'message': 'deleted' }

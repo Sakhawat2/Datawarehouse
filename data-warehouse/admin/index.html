@@ -1,818 +1,258 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>📦 Data Warehouse Admin Dashboard</title>
+  <meta charset="utf-8" />
+  <title>📊 Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Bootstrap + Google Fonts -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
+    :root {
+      --bg: #f8f9fa;
+      --card-bg: #fff;
+      --text: #212529;
+      --accent: #0d6efd;
+    }
+    [data-theme="dark"] {
+      --bg: #121212;
+      --card-bg: #1e1e1e;
+      --text: #eaeaea;
+      --accent: #0d6efd;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      margin: 40px;
-      background-color: #f9f9f9;
-      color: #333;
+      background-color: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      transition: all 0.3s ease;
     }
 
-   
-    h1 {
-      margin-bottom: 10px;
-      color: #2c3e50;
-    }
-    h2 {
-      margin-top: 20px;
-      margin-bottom: 10px;
-      color: #2c3e50;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      background: #fff;
-      margin-top: 10px;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 10px;
-      text-align: left;
-    }
-    th {
-      background-color: #3498db;
-      color: white;
-    }
-    tr:hover {
-      background-color: #f1f1f1;
+    .card {
+      border: none;
+      border-radius: 18px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+      background-color: var(--card-bg);
+      transition: all 0.3s ease;
     }
 
-.chart-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px; /* Reduced from 30px to 10px */
-  width: 100%;
-}
+    .card:hover {
+      transform: translateY(-3px);
+    }
 
-.chart-box.pie-chart {
-  flex: 0 0 250px; /* Keep pie chart compact */
-  margin-left: 100px; /* Push pie chart slightly to the right */
-}
+    .card-title {
+      font-weight: 600;
+      text-align: center;
+    }
 
-.chart-box.line-chart {
-  flex: 1.2; /* Line chart still gets more space */
-  display: flex;
-  flex-direction: column;
-  margin-right: 100px; /* Pull line chart slightly to the left */
-}
+    .metric-card {
+      text-align: center;
+      padding: 15px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    }
 
-.line-chart-container {
-  width: 100%;
-}
+    .metric-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
 
-#sensorLineChart {
-  width: 100% !important;
-  height: auto !important;
-  display: block;
-}
+    .theme-toggle {
+      cursor: pointer;
+      font-size: 1.3rem;
+    }
 
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      color: gray;
+      font-size: 0.9rem;
+    }
 
-.storage-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 20px;
-  flex-wrap: wrap;
-  margin-top: 20px;
-}
-
-.chart-box {
-  flex: 1;
-  max-width: 32%;
-  min-width: 280px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.chart-box canvas {
-  width: 300px !important;
-  height: 300px !important;
-}
-
-
+    .btn {
+      font-size: 1rem !important;
+      font-weight: 500;
+      padding: 6px 14px;
+    }
   </style>
 </head>
-<body>  
-  <h1>📊 Data Warehouse Admin Dashboard</h1>
-  <p>Welcome to the admin dashboard. Here you can monitor storage usage, manage sensor data, and handle video uploads.</p>
 
- <h2>📦 Storage Overview</h2>
-
-
-<!-- Total Storage Display -->
-<p><strong>Total Used Storage:</strong> <span id="storage-total">Loading...</span> MB</p>
-
-<!-- Chart Row -->
-<div class="storage-row">
-  <!-- Pie Chart: Storage Breakdown -->
-  <div class="chart-box">
-    <h4>Storage Breakdown</h4>
-    <canvas id="storageChart" width="300" height="300"></canvas>
-  </div>
-
-  <!-- Bar Chart: Sensor Count -->
-  <div class="chart-box">
-    <h4>Sensor Count</h4>
-    <canvas id="sensorCountBarChart" width="300" height="300"></canvas>
-  </div>
-
-  <!-- Bar Chart: Video Count -->
-  <div class="chart-box">
-    <h4>Video Count by Size</h4>
-    <canvas id="videoCountBarChart" width="300" height="300"></canvas>
-  </div>
-</div>
-
-
-  
-
-  
-
-<h2>📈 Sensor Analytics</h2>
-
- <div class="chart-row">
-  <div class="chart-box pie-chart">
-    <canvas id="sensorPieChart"></canvas>
-  </div>
-
-  <div class="chart-box line-chart">
-    <label for="sensorSelector"><strong>Select Sensor:</strong></label>
-    <select id="sensorSelector"></select>
-    <div class="line-chart-container">
-      <canvas id="sensorLineChart"></canvas>
+<body>
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h1>📊 Admin Dashboard</h1>
+      <div>
+        <a href="/admin/sensors.html" class="btn btn-outline-secondary btn-sm mt-2">📟 Sensors</a>
+        <a href="/admin/videos.html" class="btn btn-outline-secondary ms-2">🎥 Videos</a>
+        <a href="/admin/files.html" class="btn btn-outline-primary ms-2">📁 Files</a>
+        <a href="/admin/profile.html" class="btn btn-outline-info ms-2">👤 Profile</a>
+        <button id="themeToggle" class="btn btn-outline-primary btn-sm theme-toggle">🌙 Dark Mode</button>
+      </div>
     </div>
+
+    <p class="text-muted mb-4">Overview of storage, sensors, videos and others.</p>
+
+    <!-- Metric Cards -->
+    <div class="row text-center g-3 mb-4">
+      <div class="col-md-3 col-6">
+        <div class="metric-card">
+          <div class="metric-label">Total Storage (MB)</div>
+          <div id="storage-total" class="metric-value">Loading...</div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="metric-card">
+          <div class="metric-label">Total Sensors</div>
+          <div id="sensor-total" class="metric-value">–</div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="metric-card">
+          <div class="metric-label">Total Videos</div>
+          <div id="video-total" class="metric-value">–</div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="metric-card">
+          <div class="metric-label">Avg Reading</div>
+          <div id="avg-reading" class="metric-value">–</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="row g-4">
+      <div class="col-md-4">
+        <div class="card p-3">
+          <div class="card-title">Storage Breakdown</div>
+          <canvas id="storageChart"></canvas>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card p-3">
+          <div class="card-title">Sensor Count</div>
+          <canvas id="sensorCountBarChart"></canvas>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card p-3">
+          <div class="card-title">Video Count by Size</div>
+          <canvas id="videoCountBarChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timestamp -->
+    <div class="text-center mt-4">
+      <small id="last-updated" class="text-muted">Last updated: just now</small>
+    </div>
+
+    <footer class="mt-5">
+      Data Warehouse Dashboard © 2025 | Built with FastAPI + Bootstrap + Chart.js
+    </footer>
   </div>
- </div>
 
+  <!-- ✅ DASHBOARD SCRIPT -->
+  <script>
+  document.addEventListener("DOMContentLoaded", async () => {
+    const token = localStorage.getItem("token");
+    const isAdmin = localStorage.getItem("is_admin");
 
-  
-  
-  <h2>📊 Sensor Data</h2>
-  <table id="sensor-table" border="1">
-    <thead>
-     <tr>
-       <th>Sensor ID</th>
-       <th>Start Time</th>
-       <th>End Time</th>
-       <th>Value</th>
-       <th>Unit</th>
-     </tr>
-   </thead>
-   <tbody></tbody>
-    </table>
+    // 🚨 Protect route
+    if (!token) {
+      window.location.replace("/admin/login.html");
+      return;
+    }
 
-    <tbody id="sensor-table-body">
-      
-    </tbody>
-  </table>
-  
+    if (isAdmin !== "true") {
+      window.location.replace("/admin/user.html");
+      return;
+    }
 
+    console.log("✅ Admin verified — loading dashboard...");
 
-  <h3>➕ Submit Sensor Entry</h3>
-  <form id="sensor-form">
-    <input type="text" id="sensor-id" placeholder="Sensor ID" required />
-  <input type="datetime-local" id="sensor-start" required />
-  <input type="datetime-local" id="sensor-end" required />
-  <input type="number" id="sensor-value" placeholder="Value" required />
-  <input type="text" id="sensor-unit" placeholder="Unit" required />
-  <button type="submit">Submit</button>
-  <div id="sensor-submit-status"></div>
-  </form>
-  <p id="sensor-submit-status"></p>
-  <h3>🧹 Delete Old Sensor Data</h3>
-  <form id="purge-form">
-    <input type="datetime-local" id="purge-before" required>
-    <button type="submit">Delete Before</button>
-  </form>
-  <p id="purge-status"></p>
+    try {
+      const [storageRes, sensorRes, videoRes] = await Promise.all([
+        fetch("/api/admin/storage-usage"),
+        fetch("/api/admin/sensor-count"),
+        fetch("/api/admin/video-storage")
+      ]);
 
-  <h2>🎥 Uploaded Videos</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Filename</th>
-        <th>Preview</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody id="video-table-body">
-      <tr><td colspan="3">Scanning for videos...</td></tr>
-    </tbody>
-  </table>
+      const storageData = await storageRes.json();
+      const sensorData = await sensorRes.json();
+      const videoData = await videoRes.json();
 
-  <h3>➕ Upload New Video</h3>
-  <form id="video-upload-form">
-    <input type="file" id="video-file" accept="video/*" required>
-    <button type="submit">Upload</button>
-  </form>
-  <p id="video-upload-status"></p>
+      document.getElementById("storage-total").innerText = storageData.total_storage_mb || "0";
+      document.getElementById("sensor-total").innerText = Object.keys(sensorData).length;
+      document.getElementById("video-total").innerText = Object.keys(videoData.files || {}).length;
+      document.getElementById("avg-reading").innerText = "—";
 
-   
+      // ✅ Charts
+      const ctx1 = document.getElementById("storageChart").getContext("2d");
+      new Chart(ctx1, {
+        type: "pie",
+        data: {
+          labels: Object.keys(storageData.details || {}),
+          datasets: [{
+            data: Object.values(storageData.details || {}),
+            backgroundColor: ["#4e73df", "#1cc88a", "#36b9cc"]
+          }]
+        }
+      });
 
-  <h2>📤 Export ML Training Dataset</h2>
-  <label for="sensor-select">Choose Sensor:</label>
-  <select id="sensor-select">
-    <option value="">Loading sensors...</option>
-    </select>
-  <br><br>
+      const ctx2 = document.getElementById("sensorCountBarChart").getContext("2d");
+      new Chart(ctx2, {
+        type: "bar",
+        data: {
+          labels: Object.keys(sensorData),
+          datasets: [{
+            label: "Readings",
+            data: Object.values(sensorData),
+            backgroundColor: "#1cc88a"
+          }]
+        }
+      });
 
-  <label for="start-time">Start Time:</label>
-  <input type="datetime-local" id="start-time">
+      const ctx3 = document.getElementById("videoCountBarChart").getContext("2d");
+      new Chart(ctx3, {
+        type: "bar",
+        data: {
+          labels: Object.keys(videoData.buckets || {}),
+          datasets: [{
+            label: "Videos",
+            data: Object.values(videoData.buckets || {}),
+            backgroundColor: "#36b9cc"
+          }]
+        }
+      });
 
-  <label for="end-time">End Time:</label>
-  <input type="datetime-local" id="end-time">
-  <br><br>
+      document.getElementById("last-updated").innerText = 
+        `Last updated: ${new Date().toLocaleString()}`;
+    } catch (err) {
+      console.error("❌ Error loading dashboard:", err);
+    }
 
-  <button onclick="downloadTrainingSet()">Export Dataset</button>
-  <p id="export-status"></p>
-  
-
-
-  
- <script>
-  // 📊 Load Storage Stats + Chart
-fetch('/api/admin/stats')
-  .then(res => res.json())
-  .then(data => {
-    document.getElementById("storage-total").textContent = data.total_storage;
-    const ctx = document.getElementById("typeChart").getContext("2d");
-    new Chart(ctx, {
-      type: 'pie',
-      data: {
-        labels: ['Sensor DB', 'Video Files', 'Other Files'],
-        datasets: [{
-          data: [data.sensor_storage, data.video_storage, data.other_storage],
-          backgroundColor: ['#3498db', '#e74c3c', '#2ecc71'],
-        }]
-      },
-      options: {
-        plugins: { legend: {
-          display: true,
-          position: 'bottom' } }
-      }
-    });
-  });
-
-  // 📥 Sensor Upload
-  document.getElementById("sensor-form").addEventListener("submit", e => {
-    e.preventDefault();
-    const data = {
-      sensor_id: document.getElementById("sensor-id").value,
-      start_timestamp: document.getElementById("sensor-start").value,
-      end_timestamp: document.getElementById("sensor-end").value,
-      value: parseFloat(document.getElementById("sensor-value").value),
-      unit: document.getElementById("sensor-unit").value
+    // 🚪 Logout Button
+    const navbar = document.querySelector(".d-flex");
+    const logoutBtn = document.createElement("button");
+    logoutBtn.textContent = "🚪 Logout";
+    logoutBtn.className = "btn btn-outline-danger btn-sm ms-3";
+    logoutBtn.onclick = () => {
+      localStorage.clear();
+      window.location.replace("/admin/login.html");
     };
-    fetch("/api/sensor/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    })
-      .then(res => res.json())
-      .then(msg => {
-        document.getElementById("sensor-submit-status").textContent = msg.message;
-      });
+    navbar?.appendChild(logoutBtn);
   });
-
-  // 🧹 Purge Old Sensor Data
-  document.getElementById("purge-form").addEventListener("submit", e => {
-    e.preventDefault();
-    const before = document.getElementById("purge-before").value;
-    fetch(`/api/sensor/purge/?before=${encodeURIComponent(before)}`, { method: "DELETE" })
-      .then(res => res.json())
-      .then(msg => {
-        document.getElementById("purge-status").textContent = msg.message;
-      })
-      .catch(() => {
-        document.getElementById("purge-status").textContent = "Deletion failed.";
-      });
-  });
-
-  // 📋 Load Sensor Table (Admin View)
-  function loadSensorData() {
-    fetch("/api/sensor/admin/sensors")
-      .then(response => response.json())
-      .then(data => {
-        const tbody = document.querySelector("#sensor-table tbody");
-        tbody.innerHTML = "";
-        data.forEach(row => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${row["Sensor ID"]}</td>
-            <td>${row["Start Timestamp"]}</td>
-            <td>${row["End Timestamp"]}</td>
-            <td>${row["Value"]}</td>
-            <td>${row["Unit"]}</td>
-          `;
-          tbody.appendChild(tr);
-        });
-      })
-      .catch(err => {
-        console.error("Failed to load sensor data:", err);
-      });
-
-  }
-
-  // 📦 Populate Sensor Dropdown for ML Export
-  fetch('/ml/sensors')
-    .then(res => res.json())
-    .then(sensors => {
-      const dropdown = document.getElementById("sensor-select");
-      dropdown.innerHTML = "";
-      sensors.forEach(sensor => {
-        const option = document.createElement("option");
-        option.value = sensor;
-        option.textContent = sensor;
-        dropdown.appendChild(option);
-      });
-    })
-    .catch(() => {
-      const dropdown = document.getElementById("sensor-select");
-      dropdown.innerHTML = "<option value=''>❌ Failed to load sensors</option>";
-    });
-
-  // 📥 Download ML Training Set
-  function downloadTrainingSet() {
-    const sensorId = document.getElementById("sensor-select").value;
-    const start = document.getElementById("start-time").value;
-    const end = document.getElementById("end-time").value;
-
-    if (!sensorId || !start || !end) {
-      document.getElementById("export-status").textContent = "❌ Please select sensor and time range.";
-      return;
-    }
-
-    const url = `${window.location.origin}/ml/sensor?sensor_id=${encodeURIComponent(sensorId)}&start=${start}&end=${end}`;
-
-    fetch(url)
-      .then(response => {
-        if (!response.ok) throw new Error("Dataset fetch failed");
-        return response.blob();
-      })
-      .then(blob => {
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "training_data.csv";
-        link.click();
-        document.getElementById("export-status").textContent = "✅ Dataset downloaded successfully.";
-      })
-      .catch(err => {
-        console.error(err);
-        document.getElementById("export-status").textContent = "❌ Failed to download dataset.";
-      });
-  }
-
-  // 🎥 Video Upload
-  document.getElementById("video-upload-form").addEventListener("submit", e => {
-    e.preventDefault();
-    const fileInput = document.getElementById("video-file");
-    const file = fileInput.files[0];
-    const formData = new FormData();
-    formData.append("file", file);
-
-    fetch("/api/video/", {
-      method: "POST",
-      body: formData
-    })
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById("video-upload-status").textContent = data.message;
-        fileInput.value = "";
-      })
-      .catch(err => {
-        document.getElementById("video-upload-status").textContent = "Upload failed.";
-      });
-  });
-
-  // 🎬 Load Videos
-  fetch('/api/admin/videos')
-    .then(res => res.json())
-    .then(files => {
-      const body = document.getElementById("video-table-body");
-      body.innerHTML = "";
-      if (Array.isArray(files) && files.length > 0) {
-        files.forEach(filename => {
-          const tr = document.createElement("tr");
-
-          const nameCell = document.createElement("td");
-          nameCell.textContent = filename;
-
-          const linkCell = document.createElement("td");
-          const previewLink = document.createElement("a");
-          previewLink.href = `/api/video/${filename}`;
-          previewLink.textContent = "▶ Watch";
-          previewLink.target = "_blank";
-          linkCell.appendChild(previewLink);
-
-          const deleteCell = document.createElement("td");
-          const deleteBtn = document.createElement("button");
-          deleteBtn.textContent = "🗑 Delete";
-          deleteBtn.onclick = () => {
-            fetch(`/api/video/${filename}`, { method: "DELETE" })
-              .then(res => res.json())
-              .then(msg => {
-                alert(msg.message);
-                tr.remove();
-              });
-          };
-          deleteCell.appendChild(deleteBtn);
-
-          tr.appendChild(nameCell);
-          tr.appendChild(linkCell);
-          tr.appendChild(deleteCell);
-          body.appendChild(tr);
-        });
-      } else {
-        const tr = document.createElement("tr");
-        const td = document.createElement("td");
-        td.colSpan = 3;
-        td.textContent = "No videos found.";
-        tr.appendChild(td);
-        body.appendChild(tr);
-      }
-    });
-
-  // ⏱ Fetch Sensor Time Range for ML Export
-  function fetchSensorTimeRange(sensorId) {
-    if (!sensorId) return;
-    const url = `${window.location.origin}/api/sensor-range?sensor_id=${encodeURIComponent(sensorId)}`;
-    fetch(url)
-      .then(response => {
-        if (!response.ok) throw new Error("Failed to fetch time range");
-        return response.json();
-      })
-      .then(data => {
-        document.getElementById("start-time").value = formatDateTimeLocal(data.start);
-        document.getElementById("end-time").value = formatDateTimeLocal(data.end);
-      })
-      .catch(err => {
-        console.error(err);
-        document.getElementById("start-time").value = "";
-        document.getElementById("end-time").value = "";
-      });
-  }
-
-  // 🕒 Format ISO to datetime-local
-  function formatDateTimeLocal(isoString) {
-    const date = new Date(isoString);
-    return date.toISOString().slice(0, 16);
-  }
-
-  // 🚀 Load on Page Ready
-  window.onload = () => {
-    loadSensorData();
-  };
-
-  // 📈 Sensor Distribution Pie Chart
-fetch('/api/admin/sensor-distribution')
-  .then(res => res.json())
-  .then(data => {
-    const ctx = document.getElementById("sensorPieChart").getContext("2d");
-    new Chart(ctx, {
-      type: 'pie',
-      data: {
-        labels: Object.keys(data),
-        datasets: [{
-          data: Object.values(data),
-          backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#33A383'],
-        }]
-      },
-      options: {
-        plugins: { legend: { position: 'bottom' } }
-      }
-    });
-  })
-  .catch(err => {
-    console.error("Failed to load sensor distribution:", err);
-  });
-
-
-// 📊 Sensor Line Chart with Dropdown
-
-let sensorLineChart = null; // Store chart instance globally
-
-// Fetch and render chart for selected sensor
-async function fetchSensorData(sensorName) {
-  try {
-    const response = await fetch(`http://localhost:8000/sensor-data?sensor=${encodeURIComponent(sensorName)}`);
-    const sensorData = await response.json();
-
-    // Validate data
-    if (!sensorData || !sensorData.labels || !sensorData.data || sensorData.labels.length === 0 || sensorData.data.length === 0) {
-      console.warn("No data available for sensor:", sensorName);
-      return;
-    }
-
-    const canvas = document.getElementById('sensorLineChart');
-    if (!canvas) {
-      console.error("Canvas element with ID 'sensorLineChart' not found.");
-      return;
-    }
-
-    const lineCtx = canvas.getContext('2d');
-
-    // Destroy previous chart if it exists
-    if (sensorLineChart) {
-      sensorLineChart.destroy();
-    }
-
-    // Format labels as time strings
-    const formattedLabels = sensorData.labels.map(label => {
-      const date = new Date(label);
-      return isNaN(date) ? label : date.toLocaleTimeString();
-    });
-
-    // Create new chart
-    sensorLineChart = new Chart(lineCtx, {
-      type: 'line',
-      data: {
-        labels: formattedLabels,
-        datasets: [{
-          label: sensorData.name || "Sensor Data",
-          data: sensorData.data,
-          borderColor: '#2980b9',
-          backgroundColor: 'rgba(41, 128, 185, 0.2)',
-          fill: true,
-          tension: 0.4
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: {
-          title: {
-            display: true,
-            text: `${sensorData.name || "Sensor"} - Daily Trend`
-          }
-        },
-        scales: {
-          x: {
-            title: {
-              display: true,
-              text: 'Time'
-            }
-          },
-          y: {
-            beginAtZero: true,
-            title: {
-              display: true,
-              text: 'Value'
-            }
-          }
-        }
-      }
-    });
-  } catch (error) {
-    console.error("Error fetching sensor data:", error);
-  }
-}
-
-// Load sensor list and populate dropdown
-async function loadSensorOptions() {
-  try {
-    const response = await fetch("http://localhost:8000/sensors");
-    const sensors = await response.json();
-
-    const selector = document.getElementById("sensorSelector");
-    if (!selector) {
-      console.error("Dropdown element with ID 'sensorSelector' not found.");
-      return;
-    }
-
-    selector.innerHTML = ""; // Clear existing options
-
-    sensors.forEach(sensor => {
-      const option = document.createElement("option");
-      option.value = sensor;
-      option.textContent = sensor;
-      selector.appendChild(option);
-    });
-
-    // Load chart for first sensor by default
-    if (sensors.length > 0) {
-      selector.value = sensors[0];
-      fetchSensorData(sensors[0]);
-    }
-  } catch (error) {
-    console.error("Error loading sensor options:", error);
-  }
-}
-
-// Listen for dropdown changes
-document.addEventListener("DOMContentLoaded", () => {
-  const selector = document.getElementById("sensorSelector");
-  if (selector) {
-    selector.addEventListener("change", (e) => {
-      fetchSensorData(e.target.value);
-    });
-  }
-
-  loadSensorOptions(); // Initialize dropdown and chart
-});
-
-  // Storage
-  async function updateStorageDisplay() {
-  try {
-    const response = await fetch("/storage-breakdown");
-    const data = await response.json();
-
-    console.log("Storage breakdown:", data);
-
-    // Validate data
-    if (!data || typeof data !== "object") {
-      throw new Error("Invalid storage data");
-    }
-
-    // Update total storage
-    const total = Object.values(data).reduce((a, b) => a + b, 0);
-    const totalDisplay = document.getElementById("storage-total");
-    if (totalDisplay) {
-      totalDisplay.textContent = total.toFixed(2);
-    }
-
-    // Draw pie chart
-    const ctx = document.getElementById("storageChart").getContext("2d");
-    new Chart(ctx, {
-      type: 'pie',
-      data: {
-        labels: Object.keys(data),
-        datasets: [{
-          label: 'Used Storage (MB)',
-          data: Object.values(data),
-          backgroundColor: ['#3498db', '#e74c3c', '#2ecc71']
-        }]
-      },
-      options: {
-        responsive: false,
-        maintainAspectRatio: false,
-        layout: { padding: { top: 0, bottom: 0 } },
-        plugins: {
-          legend: {
-            display: true,
-            position: 'bottom',
-            labels: { boxWidth: 20, padding: 5 }
-          }
-        }
-      }
-    });
-
-    // Optional: draw bar chart if fileCountConfig is defined
-    if (typeof fileCountConfig !== "undefined") {
-      new Chart(document.getElementById('fileCountBarChart'), fileCountConfig);
-    }
-
-  } catch (err) {
-    console.error("Failed to load storage data:", err);
-    const totalDisplay = document.getElementById("storage-total");
-    if (totalDisplay) {
-      totalDisplay.textContent = "Error";
-    }
-  }
-}
-
-updateStorageDisplay();
-
-
-// Sensor Count Bar Chart
-function updateSensorChart(chart) {
-  fetch('/api/admin/sensor-count')
-    .then(res => res.json())
-    .then(data => {
-      console.log("Sensor Count Data:", data); // Debug log
-
-      const labels = Object.keys(data);
-      const values = Object.values(data);
-
-      if (labels.length && values.length) {
-        chart.data.labels = labels;
-        chart.data.datasets[0].data = values;
-        chart.update();
-      } else {
-        console.warn("Sensor Count API returned empty data.");
-      }
-    })
-    .catch(err => {
-      console.error("Sensor Count fetch error:", err);
-    });
-}
-
-function updateVideoChart(chart) {
-  fetch('/api/admin/video-storage')
-    .then(res => res.json())
-    .then(data => {
-      console.log("Video Storage Data:", data); // Debug log
-
-      const fileSizes = data.files; // ✅ Use only the 'files' object
-      const labels = Object.keys(fileSizes); // File names
-      const values = Object.values(fileSizes); // File sizes in MB
-
-      if (labels.length && values.length) {
-        chart.data.labels = labels;
-        chart.data.datasets[0].data = values;
-        chart.data.datasets[0].label = 'Size (MB)'; // Optional: update label
-        chart.update();
-      } else {
-        console.warn("Video Storage API returned empty file data.");
-      }
-    })
-    .catch(err => {
-      console.error("Video Storage fetch error:", err);
-    });
-}
-
-document.addEventListener("DOMContentLoaded", function () {
-  const sensorCtx = document.getElementById("sensorCountBarChart").getContext("2d");
-  const videoCtx = document.getElementById("videoCountBarChart").getContext("2d");
-
-  const sensorChart = new Chart(sensorCtx, {
-    type: 'bar',
-    data: {
-      labels: ['Loading...'],
-      datasets: [{
-        label: 'Sensor Count',
-        data: [0],
-        backgroundColor: '#3498db'
-      }]
-    },
-    options: {
-      plugins: {
-        title: {
-          display: true,
-          text: 'Sensor Count by Type'
-        }
-      },
-      scales: {
-        y: { beginAtZero: true }
-      }
-    }
-  });
-
-  const videoChart = new Chart(videoCtx, {
-  type: 'bar',
-  data: {
-    labels: ['Loading...'],
-    datasets: [{
-      label: 'Size (MB)',
-      data: [0],
-      backgroundColor: '#e74c3c' // Red like your example
-    }]
-  },
-  options: {
-    plugins: {
-      title: {
-        display: true,
-        text: 'Video File Sizes'
-      },
-      tooltip: {
-        callbacks: {
-          label: context => `${context.label}: ${context.raw} MB`
-        }
-      }
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        title: {
-          display: true,
-          text: 'Size (MB)'
-        },
-        ticks: {
-          stepSize: 5
-        }
-      },
-      x: {
-        title: {
-          display: true,
-          text: 'Files'
-        }
-      }
-    }
-  }
-});
-
-  // Initial load
-  updateSensorChart(sensorChart);
-  updateVideoChart(videoChart);
-
-  // Refresh every 10 seconds
-  setInterval(() => {
-    updateSensorChart(sensorChart);
-    updateVideoChart(videoChart);
-  }, 10000);
-});
-
-</script>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script type="module" src="/static/main.js"></script>
-<script src="/main.js"></script> <!-- Adjust path if needed -->
-
+  </script>
 
 </body>
 </html>

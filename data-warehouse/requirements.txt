@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pydantic
+passlib[bcrypt]
+python-multipart
+minio         # only if you use object storage
+alembic       # for migrations (optional)

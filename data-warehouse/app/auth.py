@@ -1,49 +1,60 @@
+# app/auth.py
 import bcrypt
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from .database import SessionLocal
-from .models import User
+from app.database import SessionLocal
+from app.models import User
 
-SECRET_KEY = "your_secret_key"
+# ─────────────────────────────
+# 🔐 JWT Config
+# ─────────────────────────────
+SECRET_KEY = "super_secret_key_12345"  # use your own unique key!
 ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
+# ─────────────────────────────
+# 🔑 Password Hashing
+# ─────────────────────────────
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
-def create_access_token(data: dict, expires_delta: timedelta = timedelta(hours=1)):
+# ─────────────────────────────
+# 🎟️ Create JWT Token
+# ─────────────────────────────
+def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
-    to_encode.update({"exp": datetime.utcnow() + expires_delta})
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def get_current_active_user(authorization: str = Header(...)) -> User:
+# ─────────────────────────────
+# 👤 Verify JWT Token
+# ─────────────────────────────
+def get_current_active_user(authorization: str = Header(...)):
+    """Validate Bearer token from request headers."""
     if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authorization header")
+        raise HTTPException(status_code=401, detail="Invalid Authorization header")
 
     token = authorization.split(" ")[1]
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
-        role = payload.get("role")
+        if not username:
+            raise HTTPException(status_code=401, detail="Invalid token payload")
+
+        db = SessionLocal()
+        user = db.query(User).filter(User.username == username).first()
+        db.close()
+
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return user
+
     except JWTError:
-        raise HTTPException(status_code=403, detail="Token is invalid or expired")
-
-    db = SessionLocal()
-    user = db.query(User).filter(User.username == username).first()
-    db.close()
-
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    return user
+        raise HTTPException(status_code=401, detail="Invalid or expired token")

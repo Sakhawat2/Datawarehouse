@@ -4,6 +4,11 @@ import sqlite3
 import csv
 import os
 import datetime
+from api.sensor_admin import router as sensor_admin_router
+from api.export import router as export_router
+
+app.include_router(sensor_admin_router)
+app.include_router(export_router)
 
 sensor_router = APIRouter()
 
