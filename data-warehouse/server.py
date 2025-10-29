@@ -31,6 +31,8 @@ from jose import jwt, JWTError
 SECRET_KEY = "your-secret-key"        # replace with the one from app.auth
 ALGORITHM = "HS256"
 
+
+
 # ───────────────────────────────────────────────
 # ✅ Initialize uploads database
 # ───────────────────────────────────────────────
@@ -79,8 +81,22 @@ app = FastAPI(
     description="Centralized platform for sensor, video, and storage management.",
     version="2.3.0",
 )
+# Include routers (Sensor API, Export API)
+app.include_router(sensor_pg_router)
+app.include_router(export_router)
+
 
 models.Base.metadata.create_all(bind=engine)
+
+
+# Auto-migrate old files to MinIO once at startup
+from storage.minio_migrate import migrate_local_files_to_minio
+
+try:
+    migrate_local_files_to_minio()
+except Exception as e:
+    print("⚠️ MinIO migration skipped:", e)
+
 
 # ───────────────────────────────────────────────
 # Database setup
@@ -545,30 +561,24 @@ def delete_video(filename: str):
         print("❌ Error deleting video:", e)
         return JSONResponse({"error": str(e)}, status_code=500)
 
-
 # ───────────────────────────────────────────────
-# ✅ FILE MANAGEMENT ENDPOINTS (Documents / Photos)
+# # ───────────────────────────────────────────────
+# ✅ FILE MANAGEMENT ENDPOINTS — with MinIO + SQLite
 # ───────────────────────────────────────────────
 from fastapi import UploadFile, File, Depends, HTTPException
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import StreamingResponse
 from pathlib import Path
-import os, sqlite3
+import io, os, sqlite3
 
-from app.auth import get_current_active_user  # returns ORM User from DB
+from app.auth import get_current_active_user
 from app import models
+from storage.minio_client import minio_client, MINIO_BUCKET  # ✅ MinIO client
 
-DB_PATH = "datawarehouse.db"         # adjust if your DB path differs
-UPLOAD_ROOT = Path("uploaded_files") # per-user folders inside here
-UPLOAD_ROOT.mkdir(exist_ok=True)
+DB_PATH = "datawarehouse.db"
 
-# Mount static so previews /uploaded_files/<user>/<file> work
-try:
-    app.mount("/uploaded_files", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploaded_files")
-except Exception:
-    # already mounted during a reload
-    pass
-
+# ───────────────────────────────────────────────
+# Ensure uploads metadata table
+# ───────────────────────────────────────────────
 def _ensure_uploads_table():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -583,10 +593,11 @@ def _ensure_uploads_table():
     conn.commit()
     conn.close()
 
-# Call once at import time (safe if run multiple times)
 _ensure_uploads_table()
 
-# ✅ Upload file — saves to uploaded_files/<username>/filename + metadata in SQLite
+# ───────────────────────────────────────────────
+# ✅ Upload file → to MinIO + record metadata in SQLite
+# ───────────────────────────────────────────────
 @app.post("/api/files/upload")
 async def upload_file(
     file: UploadFile = File(...),
@@ -594,16 +605,22 @@ async def upload_file(
 ):
     username = current_user.username
 
-    user_dir = UPLOAD_ROOT / username
-    user_dir.mkdir(exist_ok=True, parents=True)
+    # Read file into memory (can be optimized later for large files)
+    contents = await file.read()
 
-    file_path = user_dir / file.filename
-    # write file
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
+    # Upload to MinIO bucket: store under username/filename
+    object_name = f"{username}/{file.filename}"
+    file_bytes = io.BytesIO(contents)
+    minio_client.put_object(
+        MINIO_BUCKET,
+        object_name,
+        data=file_bytes,
+        length=len(contents),
+        content_type=file.content_type or "application/octet-stream",
+    )
 
-    size_mb = round(file_path.stat().st_size / (1024 * 1024), 2)
-
+    # Save metadata into SQLite
+    size_mb = round(len(contents) / (1024 * 1024), 2)
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute(
@@ -613,10 +630,12 @@ async def upload_file(
     conn.commit()
     conn.close()
 
-    return {"message": "✅ File uploaded successfully!", "filename": file.filename, "size_mb": size_mb}
+    return {"message": "✅ File uploaded to MinIO successfully!", "filename": file.filename, "size_mb": size_mb}
 
 
-# ✅ List files — admin sees all, user sees only theirs
+# ───────────────────────────────────────────────
+# ✅ List files — user/admin scoped
+# ───────────────────────────────────────────────
 @app.get("/api/files")
 async def list_files(current_user: models.User = Depends(get_current_active_user)):
     _ensure_uploads_table()
@@ -634,7 +653,40 @@ async def list_files(current_user: models.User = Depends(get_current_active_user
     return [{"filename": r[0], "size": r[1], "username": r[2]} for r in rows]
 
 
-# ✅ Delete file — user can delete own; admin can delete any
+# ───────────────────────────────────────────────
+# ✅ Download file — stream directly from MinIO
+# ───────────────────────────────────────────────
+@app.get("/api/files/download/{filename}")
+async def download_file(filename: str, current_user: models.User = Depends(get_current_active_user)):
+    _ensure_uploads_table()
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT username FROM uploads WHERE filename=?", (filename,))
+    row = c.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    owner = row[0]
+    if not (current_user.is_admin or current_user.username == owner):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    object_name = f"{owner}/{filename}"
+
+    try:
+        file_obj = minio_client.get_object(MINIO_BUCKET, object_name)
+    except Exception:
+        raise HTTPException(status_code=404, detail="File not found in MinIO")
+
+    return StreamingResponse(file_obj, headers={
+        "Content-Disposition": f"attachment; filename={filename}"
+    })
+
+
+# ───────────────────────────────────────────────
+# ✅ Delete file — from MinIO + SQLite
+# ───────────────────────────────────────────────
 @app.delete("/api/files/delete/{filename}")
 async def delete_file(filename: str, current_user: models.User = Depends(get_current_active_user)):
     _ensure_uploads_table()
@@ -652,68 +704,94 @@ async def delete_file(filename: str, current_user: models.User = Depends(get_cur
         conn.close()
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    # delete file from disk
-    file_path = UPLOAD_ROOT / owner / filename
-    if file_path.exists():
-        file_path.unlink()
+    object_name = f"{owner}/{filename}"
+    try:
+        minio_client.remove_object(MINIO_BUCKET, object_name)
+    except Exception as e:
+        print("⚠️ Warning:", e)
 
-    # delete metadata
     c.execute("DELETE FROM uploads WHERE filename=?", (filename,))
     conn.commit()
     conn.close()
 
-    return {"message": "✅ File deleted successfully"}
+    return {"message": "✅ File deleted successfully from MinIO"}
 
 
-# ✅ Download file — admin can download any; users only theirs
-@app.get("/api/files/download/{filename}")
-async def download_file(filename: str, current_user: models.User = Depends(get_current_active_user)):
-    _ensure_uploads_table()
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT username FROM uploads WHERE filename=?", (filename,))
-    row = c.fetchone()
-    conn.close()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    owner = row[0]
-    if not (current_user.is_admin or current_user.username == owner):
-        raise HTTPException(status_code=403, detail="Not authorized")
-
-    file_path = UPLOAD_ROOT / owner / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found on disk")
-
-    return FileResponse(file_path)
-
-
-# ✅ File stats for chart (global)
+# ───────────────────────────────────────────────
+# ✅ File stats — still based on SQLite records
+# ───────────────────────────────────────────────
 @app.get("/api/files/stats")
 def get_file_stats():
+    _ensure_uploads_table()
     stats = {"Images": 0, "Documents": 0, "Videos": 0, "Others": 0}
 
-    for root, _, files in os.walk(UPLOAD_ROOT):
-        for fname in files:
-            path = Path(root) / fname
-            size_mb = round(path.stat().st_size / (1024 * 1024), 2)
-            ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT filename, size_mb FROM uploads")
+    files = c.fetchall()
+    conn.close()
 
-            if ext in {"jpg", "jpeg", "png", "gif"}:
-                stats["Images"] += size_mb
-            elif ext in {"pdf", "doc", "docx", "txt", "xlsx", "pptx"}:
-                stats["Documents"] += size_mb
-            elif ext in {"mp4", "avi", "mov", "mkv"}:
-                stats["Videos"] += size_mb
-            else:
-                stats["Others"] += size_mb
+    for fname, size_mb in files:
+        ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
+        if ext in {"jpg", "jpeg", "png", "gif"}:
+            stats["Images"] += size_mb
+        elif ext in {"pdf", "doc", "docx", "txt", "xlsx", "pptx"}:
+            stats["Documents"] += size_mb
+        elif ext in {"mp4", "avi", "mov", "mkv"}:
+            stats["Videos"] += size_mb
+        else:
+            stats["Others"] += size_mb
 
     return {k: round(v, 2) for k, v in stats.items()}
 
 
+# ✅ Migrate existing local files to MinIO bucket (Admin only)
+from storage.minio_client import minio_client, MINIO_BUCKET
+import io
+
+@app.post("/api/files/migrate-minio")
+async def migrate_to_minio(current_user: models.User = Depends(get_current_active_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT filename, username FROM uploads")
+    rows = c.fetchall()
+    conn.close()
+
+    uploaded = []
+    skipped = []
+
+    for filename, username in rows:
+        file_path = UPLOAD_ROOT / username / filename
+        if not file_path.exists():
+            skipped.append(filename)
+            continue
+
+        object_name = f"{username}/{filename}"
+        with open(file_path, "rb") as f:
+            data = io.BytesIO(f.read())
+            minio_client.put_object(
+                MINIO_BUCKET,
+                object_name,
+                data,
+                length=data.getbuffer().nbytes,
+                content_type="application/octet-stream",
+            )
+        uploaded.append(filename)
+
+    return {
+        "message": f"✅ Migration complete: {len(uploaded)} uploaded, {len(skipped)} skipped.",
+        "uploaded": uploaded,
+        "skipped": skipped
+    }
+
+
+# ───────────────────────────────────────────────
 # ───────────────────────────────────────────────
 # AUTHENTICATION (User/Admin)
+# ───────────────────────────────────────────────
 # ───────────────────────────────────────────────
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
@@ -1000,6 +1078,82 @@ def create_default_admin():
         db.close()
 
 
+# ───────────────────────────────────────────────
+# 🔑 API KEY MANAGEMENT (Admin only)
+# ───────────────────────────────────────────────
+from app.api_key import (
+    assign_api_key_to_user,
+    get_user_by_api_key,
+    revoke_api_key
+)
+from fastapi import Header
+
+# ✅ Generate & assign API key (admin only)
+@app.post("/api/admin/generate-api-key/{username}")
+def generate_user_api_key(username: str, current_user: models.User = Depends(get_current_active_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can generate API keys")
+
+    api_key = assign_api_key_to_user(username)
+    return {
+        "message": f"✅ API key generated for {username}",
+        "api_key": api_key
+    }
+
+
+# ✅ Revoke a user’s API key (admin only)
+@app.post("/api/admin/revoke-api-key/{username}")
+def revoke_user_api_key(username: str, current_user: models.User = Depends(get_current_active_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Only admins can revoke API keys")
+
+    revoke_api_key(username)
+    return {"message": f"🚫 API key revoked for {username}"}
+
+
+# ✅ API key–based authentication (for programmatic access)
+@app.get("/api/auth/by-api-key")
+def auth_by_api_key(x_api_key: str = Header(None)):
+    """
+    Verify API key passed via 'X-API-Key' header.
+    Example: curl -H "X-API-Key: abc123..." http://localhost:8000/api/auth/by-api-key
+    """
+    user = get_user_by_api_key(x_api_key)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+    return {
+        "message": "✅ API key is valid",
+        "user": user
+    }
+
+
+
+# ───────────────────────────────────────────────
+
+@app.post("/api/files/migrate-minio")
+def migrate_files_to_minio(user=Depends(get_current_user)):
+    """Migrate all files to MinIO storage."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    # Logic to migrate files to MinIO
+    uploaded_files = []
+    skipped_files = []
+
+    for root, dirs, files in os.walk("storage/files"):
+        for filename in files:
+            file_path = os.path.join(root, filename)
+            if upload_file_to_minio(file_path):
+                uploaded_files.append(filename)
+            else:
+                skipped_files.append(filename)
+
+    return {
+        "message": "File migration completed",
+        "uploaded": uploaded_files,
+        "skipped": skipped_files
+    }
 
 
 # ───────────────────────────────────────────────

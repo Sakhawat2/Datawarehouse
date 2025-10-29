@@ -162,19 +162,27 @@
 
     // --- Load Sensor Data ---
     async function loadSensorData(sensorId) {
-      if (!sensorId) return;
-      const res = await fetch(`/api/sensors/${sensorId}/readings`, { headers: authHeader });
-      if (!res.ok) return;
-      const rows = await res.json();
-      console.log("Sensor data:", rows);
-      renderTable(rows);
-      renderChart(rows);
-    }
+  if (!sensorId) return;
+  const res = await fetch(`/api/sensors/${sensorId}/readings`, { headers: authHeader });
+  if (!res.ok) return;
+  const rows = await res.json();
+  console.log("✅ Received rows:", rows); // 👈 ADD THIS
+  if (!Array.isArray(rows) || !rows.length) {
+    console.warn("⚠️ No readings found for this sensor.");
+    renderTable([]);
+    if (chart) chart.destroy();
+    return;
+  }
+  renderTable(rows);
+  renderChart(rows);
+}
+
 
     // --- Render Chart & Stats ---
     function renderChart(rows) {
-      const labels = rows.map(r => fmt(r.start_time || r.ts));
-      const values = rows.map(r => r.value);
+      const labels = rows.map(r => fmt(r.start_time));
+      const values = rows.map(r => parseFloat(r.value));
+
 
       if (chart) chart.destroy();
       const ctx = document.getElementById("sensorChart").getContext("2d");

@@ -258,7 +258,9 @@
         <td>${r.value}</td>
         <td>${r.unit}</td>
         <td>
+          <button class="btn btn-warning btn-sm" onclick="editReading('${r.id}', ${r.value}, '${r.unit}')">✏️ Edit</button>
           <button class="btn btn-sm btn-danger" onclick="deleteReading('${r.id}')">🗑️ Delete</button>
+
         </td>`;
       tbody.appendChild(tr);
     });

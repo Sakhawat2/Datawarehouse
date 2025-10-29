@@ -50,6 +50,11 @@
       </div>
     </div>
 
+    <div class="mb-3 d-flex justify-content-between align-items-center">
+  <h3>📦 File Management</h3>
+  <button id="migrateBtn" class="btn btn-warning btn-sm">☁️ Migrate to MinIO</button>
+</div>
+
     <!-- Upload -->
     <div class="card p-3 mb-4">
       <h5>📤 Upload New File</h5>
@@ -238,5 +243,24 @@
 
     loadFiles();
   </script>
+
+  <script>
+document.getElementById("migrateBtn").addEventListener("click", async () => {
+  if (!confirm("⚠️ This will upload all existing files to MinIO. Continue?")) return;
+
+  const res = await fetch("/api/files/migrate-minio", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+  });
+
+  if (res.ok) {
+    const result = await res.json();
+    alert(`${result.message}\n\nUploaded: ${result.uploaded.join(", ") || "None"}\nSkipped: ${result.skipped.join(", ") || "None"}`);
+  } else {
+    alert("❌ Migration failed. Check server logs.");
+  }
+});
+</script>
+
 </body>
 </html>

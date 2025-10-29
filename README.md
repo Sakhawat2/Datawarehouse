@@ -47,3 +47,16 @@ data-warehouse/
 ├── Specification.md             
 ├── README.md                    
 └── run.sh / start.bat          
+
+
+
+
+start server
+uvicorn server:app --reload
+url# http://localhost:8000/admin/login.html
+MinIO # http://192.168.8.141:9001/browser/datawarehouse
+
+user ID          Password
+admin            admin123
+john             john123
+kim              kim123

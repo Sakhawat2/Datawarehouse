@@ -13,87 +13,111 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    :root {
-      --bg: #f8f9fa;
-      --card-bg: #fff;
-      --text: #212529;
-      --accent: #0d6efd;
-    }
-    [data-theme="dark"] {
-      --bg: #121212;
-      --card-bg: #1e1e1e;
-      --text: #eaeaea;
-      --accent: #0d6efd;
-    }
+  :root {
+    --bg: #f8f9fa;
+    --card-bg: #fff;
+    --text: #212529;
+    --accent: #0d6efd;
+  }
 
-    body {
-      background-color: var(--bg);
-      font-family: 'Inter', sans-serif;
-      color: var(--text);
-      transition: all 0.3s ease;
-    }
+  [data-theme="dark"] {
+    --bg: #121212;
+    --card-bg: #1e1e1e;
+    --text: #eaeaea;
+    --accent: #66b2ff;
+  }
 
-    .card {
-      border: none;
-      border-radius: 18px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
-      background-color: var(--card-bg);
-      transition: all 0.3s ease;
-    }
+  body {
+    background-color: var(--bg);
+    font-family: 'Inter', sans-serif;
+    color: var(--text);
+    transition: background-color 0.3s, color 0.3s;
+  }
 
-    .card:hover {
-      transform: translateY(-3px);
-    }
+  .card {
+    border: none;
+    border-radius: 18px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    background-color: var(--card-bg);
+    transition: all 0.3s ease;
+  }
 
-    .card-title {
-      font-weight: 600;
-      text-align: center;
-    }
+  .card:hover {
+    transform: translateY(-3px);
+  }
 
-    .metric-card {
-      text-align: center;
-      padding: 15px;
-      background: var(--card-bg);
-      border-radius: 12px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-    }
+  .card-title {
+    font-weight: 600;
+    text-align: center;
+  }
 
-    .metric-value {
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: var(--accent);
-    }
+  .metric-card {
+    text-align: center;
+    padding: 15px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  }
 
-    .theme-toggle {
-      cursor: pointer;
-      font-size: 1.3rem;
-    }
+  .metric-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
 
-    footer {
-      text-align: center;
-      margin-top: 3rem;
-      color: gray;
-      font-size: 0.9rem;
-    }
+  .theme-toggle {
+    cursor: pointer;
+    font-size: 1.3rem;
+    transition: background-color 0.3s, color 0.3s;
+  }
 
-    .btn {
-      font-size: 1rem !important;
-      font-weight: 500;
-      padding: 6px 14px;
-    }
-  </style>
+  footer {
+    text-align: center;
+    margin-top: 3rem;
+    color: gray;
+    font-size: 0.9rem;
+  }
+
+  .btn {
+    font-size: 1rem !important;
+    font-weight: 500;
+    padding: 6px 14px;
+  }
+
+  /* Table and Navbar in dark mode */
+  [data-theme="dark"] .navbar {
+    background-color: #0a58ca !important;
+  }
+
+  [data-theme="dark"] .table th {
+    background-color: #333 !important;
+    color: #eaeaea;
+  }
+
+  [data-theme="dark"] .table td {
+    background-color: #1a1a1a !important;
+    color: #eaeaea;
+  }
+</style>
+
 </head>
 
 <body>
   <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h1>📊 Admin Dashboard</h1>
+
+      
       <div>
         <a href="/admin/sensors.html" class="btn btn-outline-secondary btn-sm mt-2">📟 Sensors</a>
         <a href="/admin/videos.html" class="btn btn-outline-secondary ms-2">🎥 Videos</a>
         <a href="/admin/files.html" class="btn btn-outline-primary ms-2">📁 Files</a>
         <a href="/admin/profile.html" class="btn btn-outline-info ms-2">👤 Profile</a>
         <button id="themeToggle" class="btn btn-outline-primary btn-sm theme-toggle">🌙 Dark Mode</button>
+        <button class="btn btn-sm btn-outline-warning" onclick="generateApiKey('USERNAME')">
+        🔑 Generate API Key
+        </button>
+
       </div>
     </div>
 
@@ -252,6 +276,36 @@
     };
     navbar?.appendChild(logoutBtn);
   });
+
+
+// API Key Generation
+async function generateApiKey(username) {
+  if (!confirm(`Generate new API key for ${username}?`)) return;
+  const res = await fetch(`/api/admin/generate-api-key/${username}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+  });
+  const data = await res.json();
+  alert(`${data.message}\nAPI Key: ${data.api_key}`);
+}
+
+// 🌙 Theme toggle system using data-theme and localStorage
+  const themeBtn = document.getElementById("themeToggle");
+
+  // Load saved preference
+  const savedTheme = localStorage.getItem("theme") || "light";
+  document.documentElement.setAttribute("data-theme", savedTheme);
+  themeBtn.textContent = savedTheme === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+
+  // Toggle handler
+  themeBtn.addEventListener("click", () => {
+    const current = document.documentElement.getAttribute("data-theme");
+    const next = current === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    localStorage.setItem("theme", next);
+    themeBtn.textContent = next === "dark" ? "☀️ Light Mode" : "🌙 Dark Mode";
+  });
+
   </script>
 
 </body>
